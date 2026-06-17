@@ -87,133 +87,147 @@ git pull --rebase origin main
 
 ## 4. Deploy en otro servidor (controlado desde el repo)
 
-Esta es la receta completa para levantar el daemon en un servidor nuevo y dejarlo **gobernado por el repo de GitHub** (los cambios se aplican con un `git pull` + restart, nunca editando directo en producción).
+Esta receta asume:
+
+- **Usuario** ya existente en el servidor — se reutiliza el que tengas (en los ejemplos: `<usuario>`). No se crea ningún usuario de servicio dedicado.
+- **Directorio del proyecto = HOME del usuario** — el repo se clona en `~/MdH` (es decir, `/home/<usuario>/MdH`).
+- **MySQL/MariaDB externo** — no se instala motor de base de datos en el servidor del daemon. La base ya existe en otro host y se accede por red (`DB_HOST`, `DB_PORT`).
+
+> Reemplaza `<usuario>` por tu usuario real en todos los comandos. Si el HOME no es `/home/<usuario>`, ajusta los paths absolutos del unit de systemd.
 
 ### 4.1 Preparar el servidor
 
-Como root o con sudo:
+Solo se necesita Node y Git. Como root (o con `sudo`):
 
 ```bash
-# 1. Node 20 LTS (Debian/Ubuntu)
+# Node 20 LTS (Debian/Ubuntu)
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt-get install -y nodejs git
-
-# 2. MariaDB/MySQL
-apt-get install -y mariadb-server
-systemctl enable --now mariadb
-
-# 3. Usuario de servicio (sin shell de login)
-useradd -r -m -d /opt/mdh -s /bin/bash mdh
 ```
 
-Crear la base de datos:
+Verificar conectividad a la base externa antes de continuar:
+
+```bash
+# desde el servidor del daemon, como <usuario>
+nc -vz <DB_HOST> <DB_PORT>          # debe decir "succeeded"
+# opcional, si tienes cliente mysql instalado:
+mysql -h <DB_HOST> -P <DB_PORT> -u <DB_USER> -p -e 'SELECT 1;'
+```
+
+### 4.2 Crear la base de datos en el servidor externo
+
+Hazlo desde donde administres el motor (un cliente, phpMyAdmin, otra shell):
 
 ```sql
 CREATE DATABASE mdh CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'mdh'@'localhost' IDENTIFIED BY '<password>';
-GRANT ALL PRIVILEGES ON mdh.* TO 'mdh'@'localhost';
+CREATE USER 'mdh'@'%' IDENTIFIED BY '<password>';
+GRANT ALL PRIVILEGES ON mdh.* TO 'mdh'@'%';
 FLUSH PRIVILEGES;
 ```
 
-### 4.2 Clonar el repo
+> Si el motor restringe orígenes, sustituye `'%'` por la IP del servidor del daemon (`'mdh'@'<ip-del-daemon>'`). Asegúrate de que `bind-address` y el firewall del host de la base permitan la conexión entrante.
+
+### 4.3 Clonar el repo en el HOME del usuario
+
+Logueado como el usuario existente (sin `sudo`):
 
 ```bash
-sudo -u mdh -i
-cd /opt/mdh
-git clone https://github.com/ivuarte/MdH.git app
-cd app
+cd ~                                # /home/<usuario>
+git clone https://github.com/ivuarte/MdH.git
+cd MdH
 cp .env.example .env
-# editar .env con los valores reales del entorno
-nano .env
+nano .env                           # completar valores reales (DB_HOST apunta al motor externo)
 npm ci --omit=dev
-npm run migrate
+npm run migrate                     # corre migrations/*.sql contra la BD externa
 ```
 
 Probar manualmente que arranca:
 
 ```bash
 npm start
-# Ctrl+C cuando confirmes que aparecen los logs de los servicios
+# Ctrl+C cuando confirmes los logs de los servicios
 ```
 
-### 4.3 Instalar como servicio systemd
+### 4.4 Instalar como servicio systemd
 
-Como root, crear `/etc/systemd/system/mdh.service`:
+Como root, crear `/etc/systemd/system/mdh.service` (sustituye `<usuario>` y el path absoluto al HOME):
 
 ```ini
 [Unit]
 Description=MdH v2 — sincronizador GLPI <-> Aranda
-After=network-online.target mariadb.service
+After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=mdh
-Group=mdh
-WorkingDirectory=/opt/mdh/app
-EnvironmentFile=/opt/mdh/app/.env
+User=<usuario>
+WorkingDirectory=/home/<usuario>/MdH
+EnvironmentFile=/home/<usuario>/MdH/.env
 ExecStart=/usr/bin/node src/index.js
 Restart=on-failure
 RestartSec=5s
-StandardOutput=append:/var/log/mdh/daemon.log
-StandardError=append:/var/log/mdh/daemon.err
+# Logs: usa journald (recomendado) o redirige a un archivo dentro del HOME
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
 ```
 
+> No se incluye `mariadb.service` en `After=` porque la base es externa. El daemon ya reintenta y tiene circuit breaker; basta con `network-online.target`.
+
+Habilitar y arrancar:
+
 ```bash
-mkdir -p /var/log/mdh && chown mdh:mdh /var/log/mdh
 systemctl daemon-reload
 systemctl enable --now mdh
 systemctl status mdh
-journalctl -u mdh -f       # seguir logs en vivo
+journalctl -u mdh -f                # logs en vivo
 ```
 
-### 4.4 Actualizar producción desde el repo
+### 4.5 Actualizar producción desde el repo
 
-El flujo para aplicar un cambio publicado en GitHub:
+Flujo para aplicar un cambio publicado en GitHub (como el usuario existente):
 
 ```bash
-sudo -u mdh -i
-cd /opt/mdh/app
+cd ~/MdH
 git pull --ff-only origin main
-npm ci --omit=dev                 # solo si cambió package-lock.json
+npm ci --omit=dev                   # solo si cambió package-lock.json
 # (las migraciones se aplican solas si RUN_MIGRATIONS_ON_START=true)
 # si lo desactivaste: npm run migrate
-exit
 sudo systemctl restart mdh
 sudo journalctl -u mdh -n 100 -f
 ```
 
-### 4.5 Rollback rápido
+### 4.6 Rollback rápido
 
 ```bash
-cd /opt/mdh/app
-git log --oneline -10              # localizar el commit estable previo
+cd ~/MdH
+git log --oneline -10               # localizar el commit estable previo
 git checkout <sha>                  # detached HEAD a la versión buena
 sudo systemctl restart mdh
-# cuando se arregle main: git checkout main && git pull && systemctl restart mdh
+# cuando se arregle main: git checkout main && git pull && sudo systemctl restart mdh
 ```
 
 > Migraciones **solo agregan** (nunca editan archivos viejos), así que volver a un commit anterior es seguro siempre que el schema agregado por el commit nuevo sea aditivo.
 
-### 4.6 Auto-deploy opcional (GitHub → servidor)
+### 4.7 Auto-deploy opcional (GitHub → servidor)
 
 Si quieres que `push` a `main` despliegue automáticamente, hay dos opciones simples:
 
 **A. Webhook + script tirado por el propio servidor**
 
-1. En el servidor crear `/opt/mdh/deploy.sh`:
+1. En el servidor, en el HOME del usuario, crear `~/MdH/deploy.sh`:
    ```bash
    #!/usr/bin/env bash
    set -euo pipefail
-   cd /opt/mdh/app
-   sudo -u mdh git pull --ff-only origin main
-   sudo -u mdh npm ci --omit=dev
-   systemctl restart mdh
+   cd "$HOME/MdH"
+   git pull --ff-only origin main
+   npm ci --omit=dev
+   sudo systemctl restart mdh
    ```
-2. Exponerlo con un webhook secreto (ej. usando [`webhook`](https://github.com/adnanh/webhook) o un mini-Express con verificación de firma `X-Hub-Signature-256`).
+   `chmod +x ~/MdH/deploy.sh`
+2. Exponerlo con un webhook secreto (ej. usando [`webhook`](https://github.com/adnanh/webhook) o un mini-Express con verificación de firma `X-Hub-Signature-256`) ejecutándose con el mismo usuario.
 3. Configurar el webhook en GitHub → Settings → Webhooks → `Push` events.
 
 **B. GitHub Actions con SSH**
@@ -232,21 +246,28 @@ jobs:
       - uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
+          username: ${{ secrets.DEPLOY_USER }}   # el usuario existente del servidor
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            cd /opt/mdh/app
+            cd "$HOME/MdH"
             git pull --ff-only origin main
             npm ci --omit=dev
             sudo systemctl restart mdh
 ```
 
 Secrets a configurar en `Settings → Secrets and variables → Actions`:
-`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` (clave privada con acceso al servidor).
+`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` (clave privada cuya pública esté en `~/.ssh/authorized_keys` del usuario en el servidor).
+
+> Para que `sudo systemctl restart mdh` funcione sin contraseña en el deploy, agrega una regla en `/etc/sudoers.d/mdh`:
+> ```
+> <usuario> ALL=(root) NOPASSWD: /bin/systemctl restart mdh, /bin/systemctl status mdh
+> ```
 
 ---
 
 ## 5. Operación día a día
+
+Todos los comandos se ejecutan como el usuario que dueño del proyecto (`<usuario>`); solo `systemctl` requiere `sudo`.
 
 | Acción | Comando |
 |---|---|
@@ -254,9 +275,9 @@ Secrets a configurar en `Settings → Secrets and variables → Actions`:
 | Logs en vivo | `journalctl -u mdh -f` |
 | Reiniciar | `sudo systemctl restart mdh` |
 | Parar | `sudo systemctl stop mdh` |
-| Health JSON | `cat /opt/mdh/app/state/health.json` |
-| Aplicar migración manualmente | `cd /opt/mdh/app && sudo -u mdh npm run migrate` |
-| Backfill / utilidad puntual | `cd /opt/mdh/app && sudo -u mdh node scripts/<nombre>.js` |
+| Health JSON | `cat ~/MdH/state/health.json` |
+| Aplicar migración manualmente | `cd ~/MdH && npm run migrate` |
+| Backfill / utilidad puntual | `cd ~/MdH && node scripts/<nombre>.js` |
 
 Habilitar solo un subconjunto de servicios (en `.env`):
 
