@@ -1,0 +1,104 @@
+"Categoría Tipo
+(Incidente o Requerimiento)";"Categoría - Nivel 1
+(Ciclo de Vida DUA)";"Código Categoría Aranda
+Grupo";"Categoría - Nivel 2
+(Servicio Específico)";"Código Categoría Aranda
+Sub Grupo";"Responsable de Gestión
+Grupo"
+Incidencia;Problema al modificar la DUA posterior a la aceptación;820;No permite modificar un campo;821;Consorcio - Mesa de Servicio N1
+Incidencia;Problema al modificar la DUA posterior a la aceptación;820;"Permite modificar un campo, pero no se refleja el ajuste
+";822;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas al Guardar / Almacenar;823;Problemas al intentar guardar o recuperar borradores/versiones de la DUA;824;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas Asociados a la Infraestructura IT (Oculta);913;Escalabilidad: Se determina que el problema le corresponde resolverlo a la DTIC a nivel Infraestructura IT;914;Ministerio de Hacienda - DTIC
+Incidencia;Problemas Asociados a la Selectividad;825;"Problema Técnico a la hora del crear una regla. 
+(Los usuarios serán la DGR)";827;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas Asociados a la Selectividad;825;No se generó el Levante automático;829;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas Asociados a la Selectividad;825;No se visualiza el aforador asignado;830;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas Asociados a la Selectividad;825;Problemas con la notificación recibida por correo;831;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas Asociados a la Selectividad;825;Problemas con las observaciones;832;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas Asociados a la Selectividad;825;Problemas en el enrutamiento del DUA;833;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas Asociados a la Selectividad;825;Problemas en la reasignación de DUAs;834;Consorcio - Mesa de Servicio N1
+Requerimiento;Problemas Asociados a la Selectividad;825;Problemas técnicos por parte del aforador;900;Consorcio - Mesa de Servicio N1
+Requerimiento;Problemas Asociados a la Selectividad;825;"Se detecta un problema en la regla o se requiere ajustar la regla. 
+(Ej: Regla mal hecha, bajar la selectividad)";901;Consorcio - Especialista N2
+Incidencia;Problemas Asociados a la Selectividad;825;Dificultades relacionadas al proceso de impugnación sobre el aforo realizado;826;Ministerio de Hacienda - DGA -DGT
+Incidencia;Problemas Asociados a la Selectividad;825;Problemas asociados a la selección o cargas de trabajo y asignación de aforador;828;Ministerio de Hacienda - DGA -DGT
+Incidencia;Problemas con el cálculo de la Liquidación;835;Error en el cálculo de la liquidación;836;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas con el cálculo de la Liquidación;835;Se determina que el error esta en ATENA  (endopint de API);838;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas con el cálculo de la Liquidación;835;Escalamiento: Error en tipo de cambio, verificar interoperabilidad con BCCR ;840;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas con el cálculo de la Liquidación;835;Escalamiento: Se evidencia un error en la fórmula o incisos arancelarios sin actualizar;837;Ministerio de Hacienda - DGA -DGT
+Incidencia;Problemas con el cálculo de la Liquidación;835;Se determina que el error esta en el API del cliente que generó el DUA, se insta a comunicarse con su proveedor;839;Ministerio de Hacienda - DTIC
+Incidencia;Problemas con Llenado y Aceptación;841;No existe claridad sobre el error que genera el sistema;842;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas con Llenado y Aceptación;841;El sistema no acepta la declaración o la acepta y no numera.;843;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas con Llenado y Aceptación;841;El sistema no permite editar el DUA después de haberlo guardado ;844;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas con Llenado y Aceptación;841;Faltan opciones en un combo box;845;Consorcio - Mesa de Servicio N1
+Requerimiento;Problemas con Llenado y Aceptación;841;Consulta sobre llenado de un campo específico;902;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Acceso;846;"No se puede ingresar a Atena 
+(error de autenticación, plataforma no disponible).";847;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Acceso;846;Problemas con la asignación de perfiles ;849;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Acceso;846;Problemas con el Perfil asignado;848;Ministerio de Hacienda - DGA -DGT
+Requerimiento;Problemas de Acceso;846;Autorización de cuentas de Usuario ;850;Ministerio de Hacienda - DGA -DGT
+Requerimiento;Problemas de Acceso;911;Escalabilidad: Restablecimiento de contraseña por olvido o bloqueo;912;Ministerio de Hacienda - DTIC
+Incidencia;Problemas de Anotación de Salida;853;El sistema no permite registrar la salida efectiva de la mercancía;854;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Anotación de Salida;853;En segmento Boletín de Liquidación no se genera el link para generar la anotación de salida;855;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Asociación de Documentos LPCO;856;Consultar sobre el tipo de documento LPCO requerido para una operación específica.;857;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Asociación de Documentos LPCO;856;Error  al intentar adjuntar, vincular o visualizar un documento LPCO.;858;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Asociación de Documentos LPCO;856;"Escalabilidad: Falla en la conexión de interoperabilidad de ATENA con el organismo emisor del LPCO.
+
+(Problemas endpoint)";859;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Asociación de Documentos LPCO;856;Se detectan problemas de validación al asociar un LPCO;862;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Asociación de Documentos LPCO;856;LPCO aprobado por organismo emisor pero no esta en ATENA;865;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Asociación de Documentos LPCO;856;Problemas al solicitar un permiso en el módulo LPCO ;866;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Asociación de Documentos LPCO;856;"Problemas en el módulo LPCO al aprobar un permiso
+
+(Usuario: DGT - Estadística y Registro  o Aduanas)";867;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Asociación de Documentos LPCO;856;"Problemas en el módulo LPCO con el registro del permiso por parte del ente emisor.
+
+(Ejemplo Ministerio de Seguridad, OFINASE, que no usan ninguna plataforma)";868;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Asociación de Documentos LPCO;856;"Escalabilidad: Se determina problemas en la digitación del permiso aprobado en el módulo LPCO por parte del ente emisor.
+
+(Ejemplo Ministerio de Seguridad, OFINASE)";863;Ministerio de Hacienda - DGA -DGT
+Incidencia;Problemas de Asociación de Documentos LPCO;856;Escalabilidad: Se detecta que el problema de interoperabilidad esta del lado de las instituciones y no del Consorcio;860;Ministerio de Hacienda - DGA -DGT
+Requerimiento;Problemas de Acceso;846;Solicitud y asignación de Perfil de Acceso;852;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Asociación de Documentos LPCO;856;Permiso solicitado en el módulo LPCO pendiente de aprobación por autoridad Aduanera;861;Ministerio de Hacienda - DGA -DGT
+Incidencia;Problemas de Asociación de Documentos LPCO;856;Escalabilidad: Se determina que documento de identidad no esta registrado en ATENA;864;Ministerio de Hacienda - DGA -DGT
+Incidencia;Problemas de Asociación de Documentos LPCO;909;Escalabilidad: Se determina que el problema le corresponde resolverlo a la DTIC;910;Ministerio de Hacienda - DTIC
+Incidencia;Problemas de Pago;869;Problemas con el envío, respuesta o visualización del  pago;870;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Pago;869;Problemas de anulación del DUA ;871;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Pago;869;Problemas con la cuenta bancaria;873;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Pago;869;Problemas para registrar la cuenta bancaria de un usuario en ATENA;874;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas de Pago;869;Escalamiento: Requiere registrar la cuenta bancaria a un usuario;872;Ministerio de Hacienda - DGA -DGT
+Incidencia;Problemas de Pago;904;Escalamiento al Banco Central para validación técnica hasta conseguir la solución;906;Ministerio de Hacienda - DTIC
+Incidencia;Problemas de Pago;904;"Escalamiento al area Técnica del MdH para validar si los servicios de API REST ""tesoro digital"" (Ej: Web Banking, SINPE) esta operativo";905;Ministerio de Hacienda - DTIC
+Incidencia;Problemas desarrollador API ;875;Falla en el metódo de autenticación o token API;876;Consorcio - Mesa de Servicio N1
+Requerimiento;Consulta sobre el Manual de Procedimientos Aduaneros;897;Consultas sobre el Manual de Procedimientos Aduaneros o Circulares, Directrices y Resoluciones recientes sobre ajustes al procedimiento en ATENA;898;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas desarrollador API ;875;Falla en la integración o problemas con el API;877;Consorcio - Mesa de Servicio N1
+Requerimiento;Consulta sobre el Manual de Procedimientos Aduaneros;897;Escalamiento solo cuando existen consultas sobre el manual de procedimientos aduaneros, LGA - Ley General de Aduanas,  RLGA - Reglamento Ley General de Aduanas o novedades sobre Circulares o Directrices (> 1 semana);899;Ministerio de Hacienda - DGA -DGT
+Requerimiento;Problemas desarrollador API ;875;Consultas sobre documentación del API;925;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas en el proceso de rectificacion;879;Se están definiendo las politicas de rectificación, después de confirmación;880;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas en la Firma Digital;881;Problemas para firmar digitalmente en ATENA;882;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas en la Firma Digital;881;Se detecta que el error es externo, se sensibiliza a contactar a su proveedor de firma digital;883;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas en la Firma Digital;907;"Escalamiento al area Técnica del MdH para validar si la plataforma ""hacienda autentica"" esta operativa";908;Ministerio de Hacienda - DTIC
+Incidencia;Problemas en Proceso de Levante;884;El sistema no genera la autorización de levante;885;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas en Proceso de Levante;884;Escalamiento: Se determina problema de interoperabilidad es de ATENA;886;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas en Proceso de Levante;884;Escalamiento: Se determina problema de interoperabilidad es del Puerto;887;Ministerio de Hacienda - Aduanas
+Incidencia;Problemas en Proceso de Tránsito;888;Problemas al tratar de dar inicio o fin al  tránsito, o no actualización del estado de la DUA;890;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas en Proceso de Tránsito;888;Problemas al tratar de modificar datos de tránsito;891;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas en Proceso de Tránsito;888;El sistema no generó el comprobante de movilización;892;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas en Proceso de Tránsito;888;El sistema no muestra la opción de Generar Tránsito (T1);893;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas en Proceso de Tránsito;888;El sistema no permite realizar la operación de agrupar DUAS para generar un solo Tránsito (T1)  ;894;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas en Proceso de Tránsito;888;Imposibilidad de imprimir el comprobante de movilización;895;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas en Proceso de Tránsito;888;"Problemas para revisar una incidencia en tránsito y actualización de los estados
+
+(Usuario: Aduana)";896;Consorcio - Mesa de Servicio N1
+Requerimiento;Problemas en Proceso de Tránsito;888;"Imposibilidad de reportar incidencias en carretera
+
+Ejemplo: ocurrió el incidente y el usuario no sabe que hacer o no se le habilitó la funcionalidad de registrar incidencias";903;Consorcio - Mesa de Servicio N1
+Incidencia;Problemas en Proceso de Tránsito;888;"Incidencia pendiente de autorización por parte de la Aduana
+";889;Ministerio de Hacienda - DGA -DGT
+Requerimiento;Problemas de Acceso;846;"La solicitud Implica Activación Usuario Contingencia
+Mesa valida que la solicitud venga con el documento de identidad adjunto por ambos lados.";926;Consorcio - Mesa de Servicio N1
+Requerimiento;Problemas de Acceso;846;"La solicitud Implica Activación Usuario Contingencia
+DGA valorar si corresponde";927;Ministerio de Hacienda - DGA -DGT
+Requerimiento;Problemas de Acceso;911;"La solicitud Implica Activación Usuario Contingencia
+DTIC Notifica al solicitante con el usuario y contraseña";928;Ministerio de Hacienda - DTIC

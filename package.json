@@ -1,10 +1,13 @@
 {
-  "name": "glpi-sync-services",
-  "version": "1.0.0",
+  "name": "mdh-v2",
+  "version": "2.0.0",
+  "description": "Sincronizador bidireccional GLPI ↔ Aranda",
   "type": "module",
+  "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "NODE_ENV=development node src/index.js"
+    "dev": "NODE_ENV=development LOG_LEVEL=debug node src/index.js",
+    "migrate": "node -e \"import('./src/config.js').then(({validateConfig,config})=>{validateConfig();return import('./src/lib/db.js').then(({initDB})=>initDB(config));}).then(()=>import('./src/lib/migrator.js')).then(({runMigrations})=>runMigrations()).then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1);})\""
   },
   "dependencies": {
     "axios": "^1.7.2",
