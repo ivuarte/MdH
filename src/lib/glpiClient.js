@@ -185,6 +185,30 @@ class GlpiClient {
     if (!Number.isFinite(id)) throw new Error(`GLPI upload sin id: ${JSON.stringify(data).slice(0, 300)}`);
     return id;
   }
+
+  // Descarga el binario del Document. Convención GLPI REST: GET /Document/{id}?alt=media
+  // devuelve el archivo en bruto con Content-Type del documento original. Header obligatorio:
+  // Accept: application/octet-stream. Devuelve {buffer, mime, size}.
+  async downloadDocumentBinary(documentId) {
+    await this.ensureSession();
+    await this.limiter.acquire();
+    const headers = {
+      'Session-Token': this.sessionToken,
+      'App-Token': config.APP_TOKEN,
+      'Accept': 'application/octet-stream'
+    };
+    const res = await this.http.get(`/Document/${documentId}?alt=media`, {
+      headers,
+      responseType: 'arraybuffer',
+      validateStatus: s => s >= 200 && s < 300
+    });
+    health.setBreaker(this.breaker.snapshot());
+    return {
+      buffer: Buffer.from(res.data),
+      mime: res.headers['content-type'] || 'application/octet-stream',
+      size: Number(res.headers['content-length']) || res.data.length
+    };
+  }
 }
 
 export const glpiClient = new GlpiClient();

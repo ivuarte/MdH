@@ -1,0 +1,561 @@
+{
+  "info": {
+    "name": "MdH v2 — Endpoints GLPI + Aranda usados por el daemon",
+    "_postman_id": "f7c2e8a0-1d3b-4e91-b8a4-a8f0d7e9d1c2",
+    "description": "Colección reproducible de TODOS los endpoints que el daemon MdH v2 consume en producción. Permite probar cada método por separado en Postman antes de tocar código.\n\nFLUJO RECOMENDADO:\n  1) GLPI / 00 - initSession  → guarda glpi_session_token automáticamente.\n  2) Aranda / 00 - login       → guarda aranda_session_id automáticamente.\n  3) Cualquier request del resto de carpetas.\n\nVARIABLES DE COLECCIÓN:\n  GLPI:\n    GLPI_BASE_URL              p.ej. https://glpi.iammtechs.com/apirest.php\n    APP_TOKEN, USER_TOKEN      (del .env)\n    TICKET_ID                  ticket de prueba (p.ej. 43126)\n    GLPI_FOLLOWUP_ID           id de un followup de ese ticket\n    GLPI_SOLUTION_ID           id de una solution\n    GLPI_TASK_ID               id de una task\n    GLPI_DOCUMENT_ID           id de un Document existente\n    glpi_session_token         autoseteado por /initSession\n\n  Aranda ASDKAPI v8.6:\n    ARANDA_BASE_URL            https://mesadeserviciostic.hacienda.go.cr/ASDKAPI/api/v8.6\n    ARANDA_USERNAME, ARANDA_PASSWORD\n    ARANDA_ITEM                item de prueba (p.ej. 370716)\n    SEG                        segmento: 1=IM (Incidencia), 4=RF (Requerimiento)\n    USER_ID                    ARANDA_AUTHOR_ID (p.ej. 2314762)\n    STATE_ID, ARANDA_PROJECT_ID\n    aranda_session_id          autoseteado por /user/login\n\nCONVENCIONES DE BODY DE ASDKAPI v8.6 (stack ASMX/SOAP heredado, dos shapes):\n  • Array Field/Value: /user/login, /item/add/{seg}, /item/update/{id}/{seg}/{user}\n      Ejemplo: [ {\"Field\":\"username\",\"Value\":\"...\"}, ... ]\n  • Objeto plano: /item/{id}/{seg}/note, /item/list\n  Mezclar los shapes da 400 (InvalidUserName, InvalidCommentary, etc.).\n\nREFERENCIAS:\n  • Doc oficial Aranda ASDK API (v1.9 documentada, v8.6 desplegada): postman/asdk-api.pdf.\n  • Arquitectura interna: ARQUITECTURA.md sección \"Endpoints API Descubiertos\".",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "GLPI_BASE_URL",      "value": "https://glpi.iammtechs.com/apirest.php" },
+    { "key": "APP_TOKEN",          "value": "<app-token>" },
+    { "key": "USER_TOKEN",         "value": "<user-token>" },
+    { "key": "TICKET_ID",          "value": "43126" },
+    { "key": "GLPI_FOLLOWUP_ID",   "value": "11272" },
+    { "key": "GLPI_SOLUTION_ID",   "value": "11101" },
+    { "key": "GLPI_TASK_ID",       "value": "0" },
+    { "key": "GLPI_DOCUMENT_ID",   "value": "17467" },
+    { "key": "glpi_session_token", "value": "" },
+
+    { "key": "ARANDA_BASE_URL",    "value": "https://mesadeserviciostic.hacienda.go.cr/ASDKAPI/api/v8.6" },
+    { "key": "ARANDA_USERNAME",    "value": "Atena_GLPI" },
+    { "key": "ARANDA_PASSWORD",    "value": "<password>" },
+    { "key": "ARANDA_ITEM",        "value": "370716" },
+    { "key": "SEG",                "value": "4" },
+    { "key": "USER_ID",            "value": "2314762" },
+    { "key": "STATE_ID",           "value": "20" },
+    { "key": "ARANDA_PROJECT_ID",  "value": "1" },
+    { "key": "aranda_session_id",  "value": "" }
+  ],
+  "item": [
+    {
+      "name": "GLPI / 00 - Auth",
+      "description": "Inicia y cierra la sesión REST de GLPI. /initSession se autentica con app_token + user_token y devuelve un session_token que va en el header Session-Token de toda llamada posterior. El test script del request 00.1 guarda el token en la variable de colección glpi_session_token.",
+      "item": [
+        {
+          "name": "00.1 GET /initSession (login)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{GLPI_BASE_URL}}/initSession?app_token={{APP_TOKEN}}&user_token={{USER_TOKEN}}",
+              "host": ["{{GLPI_BASE_URL}}"],
+              "path": ["initSession"],
+              "query": [
+                { "key": "app_token",  "value": "{{APP_TOKEN}}" },
+                { "key": "user_token", "value": "{{USER_TOKEN}}" }
+              ]
+            },
+            "description": "Esperado 200 con `{ session_token: \"…\" }`. El test guarda el token en la variable glpi_session_token. El daemon hace lo mismo en `glpiClient.ensureSession()`."
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "const data = pm.response.json();",
+              "if (!data.session_token) { throw new Error('Sin session_token: ' + JSON.stringify(data)); }",
+              "pm.collectionVariables.set('glpi_session_token', data.session_token);",
+              "console.log('glpi_session_token = ' + data.session_token.slice(0,10) + '...');"
+            ]}
+          }]
+        },
+        {
+          "name": "00.2 GET /killSession (logout)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/killSession", "host": ["{{GLPI_BASE_URL}}"], "path": ["killSession"] },
+            "description": "Cierra la sesión asociada al session_token. 200 OK = sesión invalidada. El daemon NO la llama (relogin automático si recibe 401)."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "GLPI / Tickets",
+      "description": "Endpoints sobre el recurso Ticket. Los usa glpiTicketSync (pull), arandaTicketPull (push de tickets origen Aranda) y statusSync (PUT de status).",
+      "item": [
+        {
+          "name": "GET /Log (descubrir cambios)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" },
+              { "key": "Range",         "value": "items=0-99" }
+            ],
+            "url": {
+              "raw": "{{GLPI_BASE_URL}}/Log?order=DESC",
+              "host": ["{{GLPI_BASE_URL}}"], "path": ["Log"],
+              "query": [{ "key": "order", "value": "DESC" }]
+            },
+            "description": "Devuelve los cambios recientes (esta instancia rota ~15 entradas). user_name es siempre el dueño del API token. Por eso varios servicios polean directamente por ticket en vez de depender de /Log. Atención a la `L` mayúscula — `/log` da 400."
+          }
+        },
+        {
+          "name": "GET /Ticket/{id}",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/Ticket/{{TICKET_ID}}", "host": ["{{GLPI_BASE_URL}}"], "path": ["Ticket","{{TICKET_ID}}"] },
+            "description": "Detalle crudo. itilcategories_id sale como número (lo usa el daemon vía `getTicketRaw`)."
+          }
+        },
+        {
+          "name": "GET /Ticket/{id}?expand_dropdowns=true",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" }
+            ],
+            "url": {
+              "raw": "{{GLPI_BASE_URL}}/Ticket/{{TICKET_ID}}?expand_dropdowns=true",
+              "host": ["{{GLPI_BASE_URL}}"], "path": ["Ticket","{{TICKET_ID}}"],
+              "query": [{ "key": "expand_dropdowns", "value": "true" }]
+            },
+            "description": "Detalle con relaciones expandidas (categoría = nombre completo, etc.). Lo usa el daemon vía `getTicket()` para hidratar el texto de la categoría."
+          }
+        },
+        {
+          "name": "POST /Ticket (crear)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/Ticket", "host": ["{{GLPI_BASE_URL}}"], "path": ["Ticket"] },
+            "body": { "mode": "raw", "raw": "{\n  \"input\": {\n    \"name\": \"[Postman] Ticket de prueba\",\n    \"content\": \"<p>Cuerpo de prueba creado desde Postman</p>\",\n    \"type\": 2,\n    \"itilcategories_id\": 660,\n    \"users_id_recipient\": 1628\n  }\n}" },
+            "description": "Crea un Ticket. type=1 Incidencia, type=2 Requerimiento. Devuelve `[{id:…}]`. Lo usa arandaTicketPull cuando origen=Aranda."
+          }
+        },
+        {
+          "name": "PUT /Ticket (actualizar estado)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/Ticket", "host": ["{{GLPI_BASE_URL}}"], "path": ["Ticket"] },
+            "body": { "mode": "raw", "raw": "{\n  \"input\": {\n    \"id\": {{TICKET_ID}},\n    \"status\": 4\n  }\n}" },
+            "description": "Cambia campos del ticket. Lo usa statusSync (PULL: Aranda→GLPI) con `{id, status}` y reglas de no-degradación."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "GLPI / Timeline (Followups · Solutions · Tasks)",
+      "description": "Lectura/escritura de las entidades de la timeline. Cada una tiene su propio /Document_Item — ver la carpeta GLPI / Documents.",
+      "item": [
+        {
+          "name": "GET /Ticket/{id}/ITILFollowup",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/Ticket/{{TICKET_ID}}/ITILFollowup", "host": ["{{GLPI_BASE_URL}}"], "path": ["Ticket","{{TICKET_ID}}","ITILFollowup"] },
+            "description": "Lista comentarios del ticket. Polling directo: necesario porque /Log no captura todos los cambios. Lo usa glpiFollowupSync."
+          }
+        },
+        {
+          "name": "POST /ITILFollowup (crear comentario)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/ITILFollowup", "host": ["{{GLPI_BASE_URL}}"], "path": ["ITILFollowup"] },
+            "body": { "mode": "raw", "raw": "{\n  \"input\": {\n    \"itemtype\": \"Ticket\",\n    \"items_id\": {{TICKET_ID}},\n    \"content\": \"<p>[Postman] Comentario de prueba</p>\"\n  }\n}" },
+            "description": "Agrega un Followup. Lo usa arandaBacklinkToGlpi (con prefijo `[from aranda]`) y arandaNotesPull / arandaSolutionPull (fallback)."
+          }
+        },
+        {
+          "name": "GET /Ticket/{id}/ITILSolution",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/Ticket/{{TICKET_ID}}/ITILSolution", "host": ["{{GLPI_BASE_URL}}"], "path": ["Ticket","{{TICKET_ID}}","ITILSolution"] },
+            "description": "Lista soluciones del ticket. Lo usa glpiSolutionSync."
+          }
+        },
+        {
+          "name": "POST /ITILSolution (crear solución)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/ITILSolution", "host": ["{{GLPI_BASE_URL}}"], "path": ["ITILSolution"] },
+            "body": { "mode": "raw", "raw": "{\n  \"input\": {\n    \"itemtype\": \"Ticket\",\n    \"items_id\": {{TICKET_ID}},\n    \"content\": \"<p>[Postman] Solución de prueba</p>\"\n  }\n}" },
+            "description": "Agrega solución. Si el ticket está en status 5/6 GLPI devuelve `400 ERROR_GLPI_ADD: El tema ya está resuelto`. Por eso arandaSolutionPull cae a Followup como fallback."
+          }
+        },
+        {
+          "name": "GET /Ticket/{id}/TicketTask",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/Ticket/{{TICKET_ID}}/TicketTask", "host": ["{{GLPI_BASE_URL}}"], "path": ["Ticket","{{TICKET_ID}}","TicketTask"] },
+            "description": "Lista tareas del ticket. glpiTaskSync polea por ticket (TicketTask no aparece confiable en /Log)."
+          }
+        },
+        {
+          "name": "POST /TicketTask (crear tarea)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/TicketTask", "host": ["{{GLPI_BASE_URL}}"], "path": ["TicketTask"] },
+            "body": { "mode": "raw", "raw": "{\n  \"input\": {\n    \"tickets_id\": {{TICKET_ID}},\n    \"content\": \"<p>[Postman] Tarea de prueba</p>\"\n  }\n}" },
+            "description": "Agrega tarea. Lo usa arandaNotesPull cuando detecta ActionType=22 (Tarea) en Aranda."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "GLPI / Documents (Attachments)",
+      "description": "4 fuentes de Document_Item (timeline GLPI 10+) + lectura/escritura de Document. Lo recorre glpiAttachmentsSync.scanTicket() y la subida/bajada la hacen los push/pull.",
+      "item": [
+        {
+          "name": "GET /Ticket/{id}/Document_Item",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/Ticket/{{TICKET_ID}}/Document_Item", "host": ["{{GLPI_BASE_URL}}"], "path": ["Ticket","{{TICKET_ID}}","Document_Item"] },
+            "description": "Adjuntos enlazados directamente al ticket (Documents tab)."
+          }
+        },
+        {
+          "name": "GET /ITILFollowup/{id}/Document_Item",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/ITILFollowup/{{GLPI_FOLLOWUP_ID}}/Document_Item", "host": ["{{GLPI_BASE_URL}}"], "path": ["ITILFollowup","{{GLPI_FOLLOWUP_ID}}","Document_Item"] },
+            "description": "Adjuntos enlazados a un comentario (lo que la UI GLPI 10+ hace por defecto al subir archivos en un reply)."
+          }
+        },
+        {
+          "name": "GET /ITILSolution/{id}/Document_Item",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/ITILSolution/{{GLPI_SOLUTION_ID}}/Document_Item", "host": ["{{GLPI_BASE_URL}}"], "path": ["ITILSolution","{{GLPI_SOLUTION_ID}}","Document_Item"] },
+            "description": "Adjuntos enlazados a la solución (cuando el operador adjunta al cerrar/resolver)."
+          }
+        },
+        {
+          "name": "GET /TicketTask/{id}/Document_Item",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/TicketTask/{{GLPI_TASK_ID}}/Document_Item", "host": ["{{GLPI_BASE_URL}}"], "path": ["TicketTask","{{GLPI_TASK_ID}}","Document_Item"] },
+            "description": "Adjuntos enlazados a una tarea."
+          }
+        },
+        {
+          "name": "GET /Document/{id} (metadata)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/Document/{{GLPI_DOCUMENT_ID}}", "host": ["{{GLPI_BASE_URL}}"], "path": ["Document","{{GLPI_DOCUMENT_ID}}"] },
+            "description": "Metadata del Document: filename, filesize, mime, users_id, etc."
+          }
+        },
+        {
+          "name": "GET /Document/{id}?alt=media (binario)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" },
+              { "key": "Accept",        "value": "application/octet-stream" }
+            ],
+            "url": {
+              "raw": "{{GLPI_BASE_URL}}/Document/{{GLPI_DOCUMENT_ID}}?alt=media",
+              "host": ["{{GLPI_BASE_URL}}"], "path": ["Document","{{GLPI_DOCUMENT_ID}}"],
+              "query": [{ "key": "alt", "value": "media" }]
+            },
+            "description": "Descarga binaria del Document. Lo usa arandaAttachmentsPush.downloadDocumentBinary() para luego POST /item/addfile a Aranda."
+          }
+        },
+        {
+          "name": "POST /Document (upload multipart)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Session-Token", "value": "{{glpi_session_token}}" },
+              { "key": "App-Token",     "value": "{{APP_TOKEN}}" }
+            ],
+            "url": { "raw": "{{GLPI_BASE_URL}}/Document/", "host": ["{{GLPI_BASE_URL}}"], "path": ["Document",""] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "uploadManifest",
+                  "type": "text",
+                  "value": "{\"input\":{\"name\":\"probe.txt\",\"_filename\":[\"probe.txt\"],\"itemtype\":\"Ticket\",\"items_id\":{{TICKET_ID}}}}"
+                },
+                {
+                  "key": "filename[0]",
+                  "type": "file",
+                  "src": "probe.txt"
+                }
+              ]
+            },
+            "description": "Sube un Document y lo enlaza al ticket. Estructura obligatoria: `uploadManifest` JSON con `{name,_filename:[fname],itemtype,items_id}` + parte binaria `filename[0]`. Lo usa arandaAttachmentsPull tras descargar desde Aranda. IMPORTANTE: NO setear Content-Type manualmente; Postman lo arma con boundary correcto. Setear `application/json` rompe el multipart y GLPI responde `400 ERROR_BAD_ARRAY`."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Aranda / 00 - Auth",
+      "description": "Login ASDKAPI v8.6. Acepta SOLO el shape array `[{Field,Value},…]` (lowercase username/password). Cualquier otro shape devuelve `400 InvalidUserName`. Respuesta = array Field/Value; el test extrae sessionId y lo guarda en aranda_session_id.",
+      "item": [
+        {
+          "name": "00.1 POST /user/login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{ARANDA_BASE_URL}}/user/login", "host": ["{{ARANDA_BASE_URL}}"], "path": ["user","login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\"Field\": \"username\", \"Value\": \"{{ARANDA_USERNAME}}\"},\n  {\"Field\": \"password\", \"Value\": \"{{ARANDA_PASSWORD}}\"}\n]"
+            },
+            "description": "Esperado: 200 con array `[{Field:'sessionId', Value:'…'}, {Field:'result', Value:'true'}, …]`. El test extrae el sessionId."
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "const data = pm.response.json();",
+              "const sid = (data || []).find(x => x.Field === 'sessionId');",
+              "if (!sid) { throw new Error('Sin sessionId: ' + JSON.stringify(data)); }",
+              "pm.collectionVariables.set('aranda_session_id', sid.Value);",
+              "console.log('aranda_session_id = ' + sid.Value.slice(0,12) + '...');"
+            ]}
+          }]
+        }
+      ]
+    },
+
+    {
+      "name": "Aranda / Items",
+      "description": "CRUD de items (casos Aranda). Recordar: `/item/add` y `/item/update` usan array Field/Value; `/item/list` usa objeto plano.",
+      "item": [
+        {
+          "name": "POST /item/list (buscar)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "{{aranda_session_id}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{ARANDA_BASE_URL}}/item/list", "host": ["{{ARANDA_BASE_URL}}"], "path": ["item","list"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Paging\": { \"Size\": 25, \"Page\": 1 },\n  \"Criteria\": [],\n  \"WhereCriteria\": [],\n  \"Order\": [],\n  \"ProjectId\": {{ARANDA_PROJECT_ID}},\n  \"ViewId\": 0\n}"
+            },
+            "description": "Devuelve `{ Data: [{Id, StateId, CaseType, ComposedId, ...}] }`. Filtrar por Id directamente NO funciona — hacer barrido con AuthorId u otro criterio amplio y filtrar en cliente (limitación documentada)."
+          }
+        },
+        {
+          "name": "POST /item/add/{SEG} (crear)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "{{aranda_session_id}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{ARANDA_BASE_URL}}/item/add/{{SEG}}", "host": ["{{ARANDA_BASE_URL}}"], "path": ["item","add","{{SEG}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\"Field\": \"Subject\",         \"Value\": \"[Postman] Caso de prueba\"},\n  {\"Field\": \"Description\",     \"Value\": \"<p>Cuerpo de prueba</p>\"},\n  {\"Field\": \"AuthorId\",        \"Value\": {{USER_ID}}},\n  {\"Field\": \"CustomerId\",      \"Value\": 5081},\n  {\"Field\": \"CategoryId\",      \"Value\": 900},\n  {\"Field\": \"GroupId\",         \"Value\": 14},\n  {\"Field\": \"ResponsibleId\",   \"Value\": {{USER_ID}}},\n  {\"Field\": \"RegistryTypeId\",  \"Value\": 6},\n  {\"Field\": \"ServiceId\",       \"Value\": 551},\n  {\"Field\": \"SlaId\",           \"Value\": 913},\n  {\"Field\": \"UrgencyId\",       \"Value\": 3},\n  {\"Field\": \"PriorityId\",      \"Value\": 2},\n  {\"Field\": \"ProjectId\",       \"Value\": {{ARANDA_PROJECT_ID}}}\n]"
+            },
+            "description": "Crea un caso Aranda. SEG=1 (IM Incidencia) o 4 (RF Requerimiento). Respuesta `[{Field:'itemId',Value:N},{Field:'composedItemId',Value:'RF-…'}, …]`. arandaTicketPush lo usa con CategoryId/GroupId/ResponsibleId resueltos vía service_catalog_sync."
+          }
+        },
+        {
+          "name": "POST /item/update/{ITEM}/{SEG}/{USER}",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "{{aranda_session_id}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{ARANDA_BASE_URL}}/item/update/{{ARANDA_ITEM}}/{{SEG}}/{{USER_ID}}",
+              "host": ["{{ARANDA_BASE_URL}}"], "path": ["item","update","{{ARANDA_ITEM}}","{{SEG}}","{{USER_ID}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\"Field\": \"StateId\",    \"Value\": {{STATE_ID}}},\n  {\"Field\": \"ReasonId\",   \"Value\": 7},\n  {\"Field\": \"Commentary\", \"Value\": \"[Postman] Cambio de estado de prueba\"}\n]"
+            },
+            "description": "Cambia estado / urgencia / prioridad / commentary. **OBLIGATORIO** el campo Commentary (sin él: `400 InvalidCommentary`). Estados según CaseType:\n  CaseType=1 (IM): En Espera=10, Cerrado=11\n  CaseType=4 (RF): En Espera=19, Cerrado=29\n  Comunes: Proceso=20, Resuelto=21\nEl rol Atena_GLPI NO puede cerrar (StateId 11/29 → 403 UnauthorizedCaseClosure). Lo usa statusSync, prioritySync, arandaSolutionPush."
+          }
+        },
+        {
+          "name": "GET /item/{ITEM}/{SEG} (detalle)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "{{aranda_session_id}}" }],
+            "url": { "raw": "{{ARANDA_BASE_URL}}/item/{{ARANDA_ITEM}}/{{SEG}}", "host": ["{{ARANDA_BASE_URL}}"], "path": ["item","{{ARANDA_ITEM}}","{{SEG}}"] },
+            "description": "Detalle de un item. Devuelve 404 frecuentemente incluso con valores correctos (limitación 9). Los servicios usan /item/list en su lugar."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Aranda / Notes (timeline)",
+      "description": "Notas (comentarios). Lo usa arandaNotesPush (objeto plano) y arandaNotesPull / arandaSolutionPull (lee el note/list).",
+      "item": [
+        {
+          "name": "POST /item/{ITEM}/{SEG}/note (crear nota)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "{{aranda_session_id}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{ARANDA_BASE_URL}}/item/{{ARANDA_ITEM}}/{{SEG}}/note", "host": ["{{ARANDA_BASE_URL}}"], "path": ["item","{{ARANDA_ITEM}}","{{SEG}}","note"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Description\": \"<p>[Postman] Nota de prueba</p>\",\n  \"IsPrivate\": false\n}"
+            },
+            "description": "Body es objeto plano (no array Field/Value). El daemon usa exactamente este shape via `arandaClient.addNote()`. **Cualquier campo extra como `Files`/`Attachments` se IGNORA silenciosamente** (probado exhaustivamente — ver historia en git de este archivo)."
+          }
+        },
+        {
+          "name": "GET /item/{ITEM}/{SEG}/note/list (historial)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "{{aranda_session_id}}" }],
+            "url": { "raw": "{{ARANDA_BASE_URL}}/item/{{ARANDA_ITEM}}/{{SEG}}/note/list", "host": ["{{ARANDA_BASE_URL}}"], "path": ["item","{{ARANDA_ITEM}}","{{SEG}}","note","list"] },
+            "description": "Endpoint canónico del historial del item. Devuelve entries con `ActionType`:\n  10=CREAR ITEM, 2=ENRUTAR, 4=MODIFICAR ITEM, 16=NOTA, 20=CAMPO ADICIONAL, 22=AGREGAR TAREA.\nCampo Id viene 0 → dedupe por hash sha256(item+author+date+desc). Lo usa arandaNotesPull y arandaSolutionPull."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Aranda / Files (Attachments)",
+      "description": "Lista y sube binarios. POST /item/addfile es el endpoint documentado en la doc oficial (`postman/asdk-api.pdf`) que resolvió la Limitación 15.",
+      "item": [
+        {
+          "name": "GET /item/{ITEM}/{SEG}/{USER}/files (listar adjuntos)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "{{aranda_session_id}}" }],
+            "url": { "raw": "{{ARANDA_BASE_URL}}/item/{{ARANDA_ITEM}}/{{SEG}}/{{USER_ID}}/files", "host": ["{{ARANDA_BASE_URL}}"], "path": ["item","{{ARANDA_ITEM}}","{{SEG}}","{{USER_ID}}","files"] },
+            "description": "Devuelve `[{Id, Name, Size, Url, Created, IsPublic}, …]`. El campo `Url` contiene un token firmado y sirve para descargar el binario directamente (sin Authorization). **El Url expira en minutos** — arandaAttachmentsPull descarga + sube a GLPI en una sola pasada."
+          }
+        },
+        {
+          "name": "POST /item/addfile (subir binario)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "{{aranda_session_id}}" }],
+            "url": { "raw": "{{ARANDA_BASE_URL}}/item/addfile", "host": ["{{ARANDA_BASE_URL}}"], "path": ["item","addfile"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file0",    "type": "file", "src": "probe.txt", "contentType": "text/plain" },
+                { "key": "itemId",   "type": "text", "value": "{{ARANDA_ITEM}}" },
+                { "key": "itemType", "type": "text", "value": "{{SEG}}" },
+                { "key": "userId",   "type": "text", "value": "{{USER_ID}}" }
+              ]
+            },
+            "description": "Endpoint documentado en doc oficial v1.9 (`postman/asdk-api.pdf`), validado en v8.6.\n\nMultipart con:\n  • file0   (binario; el match es por filename del multipart, no por el nombre del key)\n  • itemId  (int — el id del item Aranda)\n  • itemType (int — segmento: 1=IM, 4=RF)\n  • userId  (int — ARANDA_AUTHOR_ID)\n\nRespuesta esperada: `[{\"FileName\":\"probe.txt\",\"Info\":null,\"Result\":true}]`.\n\nIMPORTANTE: NO setear Content-Type manualmente; Postman arma `multipart/form-data; boundary=...`. Si va `application/json`, IIS responde `400 FailureReadingRequestData`.\n\nLo usa arandaAttachmentsPush.addFileToItem()."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Aranda / Catálogos (descubrimiento)",
+      "description": "Endpoints de listado de catálogos. Útiles cuando hay que descubrir nuevos IDs (estados, prioridades, urgencias). Algunos endpoints documentados en la doc oficial NO están habilitados para el rol Atena_GLPI en esta instancia (p.ej. /impact/list devuelve 404).",
+      "item": [
+        {
+          "name": "GET /state/list",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "{{aranda_session_id}}" }],
+            "url": { "raw": "{{ARANDA_BASE_URL}}/state/list", "host": ["{{ARANDA_BASE_URL}}"], "path": ["state","list"] },
+            "description": "Lista de estados (StateId). Útil para validar/actualizar el mapeo en `src/services/statusSync.js`."
+          }
+        },
+        {
+          "name": "GET /state/{stateId}/reasons",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "{{aranda_session_id}}" }],
+            "url": { "raw": "{{ARANDA_BASE_URL}}/state/{{STATE_ID}}/reasons", "host": ["{{ARANDA_BASE_URL}}"], "path": ["state","{{STATE_ID}}","reasons"] },
+            "description": "Razones (ReasonId) válidas para transicionar a un estado dado. Lo usa la heurística de statusSync para elegir ReasonId al hacer item/update."
+          }
+        },
+        {
+          "name": "GET /urgency/list",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "{{aranda_session_id}}" }],
+            "url": { "raw": "{{ARANDA_BASE_URL}}/urgency/list", "host": ["{{ARANDA_BASE_URL}}"], "path": ["urgency","list"] },
+            "description": "Lista de UrgencyId (Aranda tiene 3 niveles: LOW=2, HIGH=3, CRITICAL=4 — no hay MEDIUM). Base del mapeo en `src/lib/priorityMapping.js`."
+          }
+        },
+        {
+          "name": "GET /priority/list",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "{{aranda_session_id}}" }],
+            "url": { "raw": "{{ARANDA_BASE_URL}}/priority/list", "host": ["{{ARANDA_BASE_URL}}"], "path": ["priority","list"] },
+            "description": "Lista de PriorityId (LOW=1, MEDIUM=2, HIGH=3, CRITICAL=4 — alineado con GLPI sin pérdida)."
+          }
+        }
+      ]
+    }
+  ]
+}

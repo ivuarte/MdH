@@ -1,4 +1,5 @@
 import axios from 'axios';
+import FormData from 'form-data';
 import { config } from '../config.js';
 import { logger } from './logger.js';
 import { withRetry } from './retry.js';
@@ -133,6 +134,38 @@ class ArandaClient {
   async listItemFiles(itemId, segment, userId) {
     return this.get(`/item/${itemId}/${segment}/${userId}/files`);
   }
+  // Sube un binario al item Aranda. Endpoint documentado en
+  // https://docs.arandasoft.com/asdk-api/pages/V1.9/descripcion/adjuntar_archivos.html
+  //   POST /item/addfile  (multipart/form-data)
+  //   fields: file0 (binario), itemId, itemType (= segmento), userId
+  //   response: [{FileName, Info, Result:true}]
+  // Validado contra v8.6 (probe-aranda-addfile.js, 2026-06-17).
+  async addFileToItem(itemId, segment, userId, { filename, buffer, mime = 'application/octet-stream' }) {
+    await this.limiter.acquire();
+    await this.ensureLogin();
+    const form = new FormData();
+    form.append('file0', buffer, { filename, contentType: mime });
+    form.append('itemId',   String(itemId));
+    form.append('itemType', String(segment));
+    form.append('userId',   String(userId));
+    const headers = {
+      ...this.authHeaders(),
+      ...form.getHeaders()  // sobreescribe Content-Type: application/json del axios singleton
+    };
+    const res = await this.http.post('/item/addfile', form, {
+      headers,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity
+    });
+    health.setBreaker(this.breaker.snapshot());
+    const arr = Array.isArray(res.data) ? res.data : [];
+    const entry = arr.find(x => x && (x.FileName === filename || x.fileName === filename)) || arr[0];
+    if (!entry || entry.Result !== true) {
+      throw new Error(`Aranda /item/addfile rechazó ${filename}: ${JSON.stringify(res.data).slice(0, 200)}`);
+    }
+    return entry;
+  }
+
   // Descarga binaria desde la Url firmada de Aranda (la Url no requiere Authorization).
   async downloadFileFromUrl(url) {
     await this.limiter.acquire();

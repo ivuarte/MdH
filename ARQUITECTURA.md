@@ -4,7 +4,7 @@
 
 Daemon de sincronización **bidireccional** entre **GLPI** (gestor de tickets IT) y **Aranda ASDK** (mesa de servicios). Mantiene ambas plataformas como un espejo: tickets, comentarios, tareas, soluciones y estados se replican en ambas direcciones por polling periódico, usando MySQL como capa de persistencia, deduplicación y trazabilidad.
 
-Implementación versión producción (v2.0.0): 17 servicios polleres, anti-bucle multi-capa, circuit breaker, rate limiting, reintentos exponenciales, logging JSON estructurado, migraciones SQL versionadas, health check, cursores persistidos. Incluye sincronización de catálogo (categorías GLPI ↔ subcategorías Aranda + segmento) y adjuntos (Aranda → GLPI binario real, GLPI → Aranda como nota-aviso por limitación de la API).
+Implementación versión producción (v2.0.0): 18 servicios polleres, anti-bucle multi-capa, circuit breaker, rate limiting, reintentos exponenciales, logging JSON estructurado, migraciones SQL versionadas, health check, cursores persistidos. Incluye sincronización de catálogo (categorías GLPI ↔ subcategorías Aranda + segmento), adjuntos **binarios reales en ambos sentidos** vía `POST /item/addfile` (doc oficial ASDKAPI v1.9, validado en v8.6 el 2026-06-17) y `arandaSolutionPull` para soluciones humanas Aranda → GLPI.
 
 ---
 
@@ -21,7 +21,7 @@ Implementación versión producción (v2.0.0): 17 servicios polleres, anti-bucle
        ┌──────────────────────────────────────────────────────────────────┐
        │                  src/index.js — Orquestador                       │
        │  validateConfig → initDB → runMigrations → preflightChecks       │
-       │  → ServiceManager.startAll(17 servicios) → SIGINT/SIGTERM        │
+       │  → ServiceManager.startAll(18 servicios) → SIGINT/SIGTERM        │
        └──────────────────────────┬────────────────────────────────────────┘
                                   │
        ┌──────────────────────────┴────────────────────────────────────────┐
@@ -107,7 +107,9 @@ MdH_v2/
 │   ├── 008_attachments.sql               # glpi_attachments + aranda_attachment_notes + aranda_inbound_files
 │   ├── 009_groups_assignment.sql         # aranda_groups + service_catalog_sync.responsable_label
 │   ├── 010_aranda_solution_pulls.sql     # tracker idempotente para arandaSolutionPull
-│   └── 011_widen_solution_pulls_status.sql # status VARCHAR(16)→(32) para 'synced_as_followup'
+│   ├── 011_widen_solution_pulls_status.sql # status VARCHAR(16)→(32) para 'synced_as_followup'
+│   ├── 012_attachments_composite_pk.sql  # PK compuesta (document_id, ticket_id) — GLPI deduplica Documents por sha1
+│   └── 013_inbound_files_source.sql      # aranda_inbound_files.source ENUM('pull','push') para anti-eco direccional
 ├── scripts/                               # Utilidades operacionales
 │   ├── explore-aranda-states.js          # Descubre estados y permisos Aranda vía API
 │   ├── verify-42558.js                   # Validación E2E (caso de prueba 1)
@@ -176,13 +178,13 @@ PUSH y PULL en ambos servicios se ejecutan en `Promise.all` en cada tick. Anti-e
 
 ### Adjuntos (3)
 
-Asimétrico por la **limitación 15**: Aranda NO acepta POST de archivos al rol `Atena_GLPI`. El flujo GLPI → Aranda usa un workaround (nota anunciando el adjunto). Aranda → GLPI sí funciona completo.
+Bidireccional con binario real desde 2026-06-17 (ver Limitación 15, resuelta).
 
 | # | Servicio | Dirección | Lógica |
 |---|----------|-----------|--------|
-| 15 | `glpiAttachmentsSync` | GLPI → DB | `GET /Ticket/{id}/Document_Item` por cada ticket mapeado → `glpi_attachments`. Filtra documentos creados por el propio bot (consultando `aranda_inbound_files.glpi_document_id`). |
-| 16 | `arandaAttachmentsPush` | DB → Aranda (workaround) | Por cada `glpi_attachments` no anunciado, publica nota Aranda: `[Adjunto GLPI] <name> (<size>) — consultar ticket GLPI #<id>`. Tracker: `aranda_attachment_notes`. |
-| 17 | `arandaAttachmentsPull` | Aranda → GLPI (real) | `GET /item/{id}/{seg}/{userId}/files` → descarga binaria desde `Url` firmado → `POST /Document` multipart a GLPI. **Crítico**: el `Url` expira en segundos, por eso descubrimiento + descarga + upload se ejecuta en una sola pasada. Tracker: `aranda_inbound_files`. |
+| 15 | `glpiAttachmentsSync` | GLPI → DB | Polea **4 fuentes Document_Item** en GLPI 10+ timeline por cada ticket mapeado: `/Ticket/{id}/Document_Item` (raíz) + `/ITILFollowup/{fid}/Document_Item` (10 últimos comentarios) + `/ITILSolution/{sid}/Document_Item` (5 últimas soluciones) + `/TicketTask/{tid}/Document_Item` (10 últimas tareas). Dedupea por `documents_id`. Inserta en `glpi_attachments` (PK compuesta `(document_id, ticket_id)`). Filtra documentos creados por el bot al PULLEAR de Aranda consultando `aranda_inbound_files WHERE source='pull'`. |
+| 16 | `arandaAttachmentsPush` | GLPI → Aranda (real) | Por cada `(document_id, ticket_id)` pendiente en `glpi_attachments`: `GET /Document/{id}?alt=media` (binario) + `POST /item/addfile` multipart con `file0`/`itemId`/`itemType`/`userId` (doc oficial v1.9). Tras subir, hace listing del item Aranda y registra el `aranda_file_id` recién creado en `aranda_inbound_files` con `source='push'`, `status='synced'`, `glpi_document_id=<doc original>` para anti-eco del pull. Tracker: `aranda_attachment_notes` (PK compuesta). |
+| 17 | `arandaAttachmentsPull` | Aranda → GLPI (real) | `GET /item/{id}/{seg}/{userId}/files` → descarga binaria desde `Url` firmado → `POST /Document` multipart a GLPI. **Crítico**: el `Url` expira en segundos, por eso descubrimiento + descarga + upload se ejecuta en una sola pasada. Inserta en `aranda_inbound_files` con `source='pull'` (default). |
 
 ---
 
@@ -337,8 +339,8 @@ El sync GLPI↔CSV es idempotente: reorganiza el árbol (13 grupos existentes ba
 ```
 glpi_attachments                         aranda_attachment_notes
 ─────────────────────────────            ─────────────────────────────
-document_id  INT PK                       document_id    INT PK
-ticket_id    INT                          ticket_id      INT
+document_id  INT  ┐                       document_id    INT  ┐
+ticket_id    INT  ┴ PK compuesta          ticket_id      INT  ┴ PK compuesta
 name         VARCHAR(255)                 aranda_item_id BIGINT
 size         BIGINT                       status         VARCHAR(16)
 mime         VARCHAR(128)                 tries          INT
@@ -352,15 +354,19 @@ aranda_file_id   INT PK
 aranda_item_id   BIGINT
 aranda_segment   TINYINT
 glpi_ticket_id   INT
-glpi_document_id INT          -- el id del Document creado en GLPI
+glpi_document_id INT          -- el id del Document creado/origen en GLPI
 name             VARCHAR(255)
 size             BIGINT
 url              TEXT          -- referencia/debug; NO se reusa (token expira)
 status           VARCHAR(16)
+source           ENUM('pull','push')  -- direccion del registro:
+                                      --   'pull' = bot descargó Aranda→creó Document GLPI
+                                      --   'push' = bot subió Document GLPI→Aranda (anti-eco para el pull)
 tries            INT
 last_error       TEXT
 detected_at / posted_at
 ```
+**PK compuesta `(document_id, ticket_id)`**: GLPI deduplica `Document` internamente por sha1; el mismo archivo subido a dos tickets distintos comparte el id de `Document` pero crea dos `Document_Item` con `items_id` distintos. La PK compuesta permite trackear cada par (Document, ticket) como una unidad de propagación independiente.
 
 ### Versionado
 ```
@@ -859,27 +865,35 @@ El siguiente tick reintenta, así que apenas el operador cierra las tareas manua
 - Aduanas → grupo 67 (Jefe Sección Técnica Caldera) como default.
 - DTIC → grupo 0 (Grupo clasificación tickets DTIC) — ambos grupos DTIC comparten id=0/N-A en el catálogo fuente.
 
-### 15. Aranda NO acepta POST de adjuntos al rol `Atena_GLPI`
+### 15. ~~Aranda NO acepta POST de adjuntos al rol `Atena_GLPI`~~ — **RESUELTO 2026-06-17**
 
-**Problema**: el endpoint `GET /item/{id}/{seg}/{userId}/files` existe y devuelve `200 [{Id,Name,Size,Url,...}]`, pero `POST` al mismo path devuelve `405 Method Not Allowed` con header `Allow: GET` — el servidor IIS explícitamente declara que ese path SÓLO acepta GET. Probados >40 endpoints alternos (`/file`, `/files`, `/upload`, `/attachment`, `/document/add`, posiciones distintas de `userId`, content-types multipart y JSON con base64) — todos 404 o 405. **No es un tema de permisos del rol, es la API ASDKAPI v8.6 que no implementa el verbo HTTP de upload**. Mismo patrón que la limitación 2 (tareas).
+**Estado**: bidireccional con binario real en ambos sentidos.
 
-**Re-validado tras grants funcionales** (2026-06-11 y 2026-06-12, sesión fresca):
-- `POST/PUT /item/{id}/{seg}/{userId}/files` → 405 `Allow: GET`.
-- `POST /item/file/{id}/{seg}` → 405 `Allow: GET`.
-- `POST /item/{id}/{seg}/note` con campo inline `Files: [{Name, Content, ContentType}]` → 200 pero el array **fue silenciosamente ignorado** (note creada, archivos no aparecen en listing posterior). Mismo resultado con variantes `Attachments` y `files` (lowercase).
-- `POST /afs/handlers/AFSHandler.ashx` (probando token de sesión como query) → 404 (ruta no resuelve para escritura).
-- Handlers `.ashx` paralelos (`UploadHandler.ashx`, `FileUpload.ashx`, `SaveFile.ashx`, etc. en `/afs/` y `/afsws/`) → 404.
+**Lo que se creía** (entre 2026-06-11 y 2026-06-17): los probes barrieron >40 endpoints alternos para upload (`/item/{id}/{seg}/{userId}/files`, handlers `.ashx`, `/item/{id}/{seg}/note` con `Files` inline, etc.) — todos 404 / 405 / 200-silently-ignored. Conclusión provisional: API no implementa upload.
 
-**Nota técnica**: el campo `Url` de los archivos apunta a `/afs/handlers/AFSHandler.ashx?guid=...&token=...` (Aranda File System Handler). El `token` allí es **la sesión ASDKAPI**, pero el `guid` se genera server-side al momento de crear el archivo. AFSHandler.ashx sirve la lectura del binario, no expone una ruta de upload programática que se haya podido descubrir.
+**Lo que faltaba probar**: la doc oficial v1.9 documenta `POST /item/addfile` (recurso top-level, multipart con `file0`+`itemId`+`itemType`+`userId`). Ese endpoint **no estaba** en el patrón de los probes (que buscaban variantes anidadas bajo `/item/{id}/...` o RPC tipo `/file/upload`). Re-probado contra el servidor v8.6 con `scripts/probe-aranda-addfile.js` (2026-06-17): los 3 variantes E1/E2/E3 devolvieron `200 [{"FileName":"…","Result":true}]` y el listing posterior confirmó `Δ archivos = +3`.
 
-**Mitigación asimétrica**:
-- **Aranda → GLPI (real)**: `arandaAttachmentsPull` descarga binarios del `Url` firmado y los sube a GLPI vía `POST /Document` multipart. **El `Url` expira en segundos**, por eso el servicio hace listing + descarga + upload en UNA sola pasada (no almacena el `Url` para usar después).
-- **GLPI → Aranda (workaround)**: `arandaAttachmentsPush` publica una nota Aranda anunciando el adjunto: `[Adjunto GLPI] <nombre> (<tamaño>) — consultar el ticket GLPI #<id>`. El operador en Aranda ve la nota y accede al archivo real en GLPI.
+**Implementación final**:
 
-**Consecuencias para el operador**:
-- Si el cliente adjunta un archivo en Aranda, aparece automáticamente como Document en el ticket GLPI.
-- Si el agente adjunta un archivo en GLPI, en Aranda aparece sólo una **nota-aviso** con nombre y tamaño — no el binario.
-- Para resolver completamente, se requiere que Aranda exponga un endpoint REST de upload (probablemente en una versión > v8.6) o habilite POST sobre `/files`. No es un bug del sincronizador ni se resuelve con permisos del rol.
+| Servicio | Dirección | Lógica |
+|---|---|---|
+| `arandaAttachmentsPull` | Aranda → GLPI | `GET /item/{id}/{seg}/{userId}/files` + descarga del `Url` firmado + `POST /Document` multipart en GLPI. El `Url` expira en minutos, por eso listing+download+upload va en una pasada. Registra row con `source='pull'`. |
+| `arandaAttachmentsPush` | GLPI → Aranda | `GET /Document/{id}?alt=media` (binario) + `POST /item/addfile` multipart con `file0`/`itemId`/`itemType`/`userId`. Tracker `aranda_attachment_notes` con PK compuesta `(document_id, ticket_id)`. |
+| Anti-eco | bidireccional | Tras `addfile` exitoso, `arandaAttachmentsPush` hace listing y registra el `aranda_file_id` recién creado en `aranda_inbound_files` con `source='push'`, `status='synced'`, `glpi_document_id=<doc original>`. El pull lo skipea (ya está marcado synced). El sync inverso `glpiAttachmentsSync` filtra solo rows `source='pull'` (los `source='push'` no son del bot al pullear — fueron uploads humanos en GLPI). |
+
+**Métodos relevantes**:
+- `glpiClient.downloadDocumentBinary(id)` — `GET /Document/{id}?alt=media` con `responseType:'arraybuffer'`, devuelve `{buffer, mime, size}`.
+- `arandaClient.addFileToItem(itemId, segment, userId, {filename, buffer, mime})` — multipart con `file0`. Verifica `Result:true` en la respuesta antes de devolver.
+
+**Polling de 4 fuentes Document_Item en GLPI 10+** (descubierto al notar que un archivo subido en un comentario quedaba enlazado al `ITILFollowup`, NO al `Ticket`): `glpiAttachmentsSync.scanTicket()` consulta las 4 entidades de timeline y dedupea por `documents_id`. Para cada `child` (followup/solution/task), limita a los más recientes (10/5/10) por costo de API.
+
+**Trampas que se evitaron**:
+- El field obligatorio se llama **`file0`** (con cero), no `file`. La doc V1.9 lo especifica así pero en la práctica v8.6 acepta cualquier nombre — el match es por el `filename` del multipart, no por el `key`. Para alinearse con la doc usamos `file0`.
+- El header `Content-Type` por defecto del singleton `arandaClient` es `application/json`. Para multipart hay que sobrescribir con `form.getHeaders()` (`form-data` npm). Si no, IIS devuelve 400 `FailureReadingRequestData`.
+- **GLPI deduplica `Document` por sha1**: el mismo archivo subido a dos tickets distintos comparte el `documents_id`. Originalmente la PK de `glpi_attachments` y `aranda_attachment_notes` era solo `document_id`, lo que hacía invisible el segundo ticket. Migración 012 cambia a PK compuesta `(document_id, ticket_id)`. JOIN del push usa ambas columnas.
+- **Anti-eco direccional**: `aranda_inbound_files` se usa para dos cosas opuestas (registro de inbound real + anti-eco del push). Migración 013 añade columna `source ENUM('pull','push')`. El filtro de `glpiAttachmentsSync` solo skipea `source='pull'`.
+
+**Colección Postman**: `postman/aranda-upload-probes.postman_collection.json` (probes E1/E2/E3 con la doc oficial; A*/B*/C*/D* mantienen la historia exhaustiva del barrido inicial para evitar reabrir hipótesis ya descartadas).
 
 ### 16. GLPI `/Document` requiere `Content-Type: multipart/form-data` con boundary
 

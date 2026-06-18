@@ -79,7 +79,7 @@ git pull --rebase origin main
 ### 3.4 Reglas de oro
 
 - **Nunca commitear `.env`** ni `state/` ni `*.log` (ya están en `.gitignore`).
-- Si cambias el schema, **agregar un archivo nuevo** en `migrations/` (ej. `012_mi_cambio.sql`). No editar migrations ya aplicadas.
+- Si cambias el schema, **agregar un archivo nuevo** en `migrations/` (ej. `0XX_mi_cambio.sql` con el siguiente número libre — al momento de escribir esto el máximo es `013`). No editar migrations ya aplicadas.
 - Si agregas variables de entorno nuevas, **actualiza `.env.example`** en el mismo commit.
 - Antes de pushear: `npm start` localmente al menos una vez para confirmar que el daemon arranca y aplica migraciones.
 
@@ -267,7 +267,7 @@ Secrets a configurar en `Settings → Secrets and variables → Actions`:
 
 ## 5. Operación día a día
 
-Todos los comandos se ejecutan como el usuario que dueño del proyecto (`<usuario>`); solo `systemctl` requiere `sudo`.
+Todos los comandos se ejecutan como el usuario dueño del proyecto (`<usuario>`); solo `systemctl` requiere `sudo`.
 
 | Acción | Comando |
 |---|---|
