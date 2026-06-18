@@ -162,12 +162,29 @@ export class StatusSyncService extends BaseService {
         const ok = truthy(obj.result ?? obj.Result ?? true);
         if (!ok) throw new Error(`Aranda update fallo: ${JSON.stringify(obj)}`);
 
+        // Verificar-después-de-escribir: Aranda puede devolver result=True sin aplicar la
+        // transición (p.ej. caso recién creado / workflow no listo). Releemos el estado real;
+        // si no coincide con el objetivo, NO marcamos synced para que el próximo tick reintente.
+        const actualState = await this.readArandaState(aranda_item_id);
+        if (actualState != null && actualState !== mapped.StateId) {
+          await getDB().query(
+            `INSERT INTO aranda_status_sync (ticket_id, aranda_item_id, last_error)
+             VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE last_error = VALUES(last_error), updated_at = NOW()`,
+            [ticket_id, aranda_item_id, `Aranda devolvió result=True pero StateId real=${actualState} ≠ objetivo ${mapped.StateId}. Reintentando en próximos ticks.`]
+          );
+          this.log.warn(`Push no aplicado ticket=${ticket_id}: Aranda quedó en StateId=${actualState}, esperado ${mapped.StateId}. Reintentará.`, {
+            ticket_id, aranda_item_id, actual_state: actualState, target_state: mapped.StateId, direction: 'GLPI_TO_ARANDA'
+          });
+          continue;
+        }
+
         await this.markPushSynced(ticket_id, aranda_item_id, glpi_status, mapped.StateId);
         await recordEvent({
           direction: 'GLPI_TO_ARANDA', entityType: 'status', srcId: ticket_id, dstId: aranda_item_id,
           content: `state=${mapped.StateId}`
         });
-        this.log.info(`Estado ticket=${ticket_id} glpi=${glpi_status} → StateId=${mapped.StateId}`, {
+        this.log.info(`Estado ticket=${ticket_id} glpi=${glpi_status} → StateId=${mapped.StateId} (verificado)`, {
           ticket_id, aranda_item_id, direction: 'GLPI_TO_ARANDA'
         });
       } catch (err) {
@@ -230,6 +247,28 @@ export class StatusSyncService extends BaseService {
          last_error         = NULL`,
       [ticketId, arandaItemId, glpiStatus, arandaStateId]
     );
+  }
+
+  // Relee el StateId real de un item Aranda vía /item/list (mismo endpoint que el pull).
+  // Devuelve el StateId (number) o null si no se pudo verificar (item fuera de la página).
+  async readArandaState(arandaItemId) {
+    try {
+      const res = await arandaClient.listItems({
+        Paging: { Start: 1, End: config.ARANDA_PULL_PAGE_SIZE, Size: 0 },
+        Criteria: [{ FieldName: 'AuthorId', Value: String(config.ARANDA_AUTHOR_ID), LogicOperatorId: 1, ComparisonOperatorId: 5 }],
+        WhereCriteria: [],
+        Order: { ColumnName: 'RegistrationDate', ModeId: 2 },
+        ProjectId: config.ARANDA_PROJECT_ID,
+        ViewId: 5
+      });
+      const it = (res?.Data ?? []).find(x => Number(x.Id) === Number(arandaItemId));
+      const sid = it ? Number(it.StateId) : null;
+      return Number.isFinite(sid) ? sid : null;
+    } catch (err) {
+      // Si la verificación falla, no bloqueamos el flujo: devolvemos null (no verificable).
+      this.log.warn(`No se pudo releer estado Aranda item=${arandaItemId}`, { err: err?.message });
+      return null;
+    }
   }
 
   // Aranda → GLPI

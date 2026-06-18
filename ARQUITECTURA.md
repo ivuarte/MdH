@@ -330,10 +330,11 @@ status              VARCHAR(16)
 last_error          TEXT
 created_at / updated_at
 ```
-Seed: `scripts/sync-glpi-from-csv.js` (77 mapeos derivados de `Libro1.utf8.csv`) + `scripts/seed-groups.js` (22 grupos).
+Seed (recomendado, cualquier instancia): `scripts/seed-catalog-local.js` — cruza por NOMBRE las categorías de la instancia GLPI destino con `Libro1.utf8.csv` y puebla los 77 mapeos. Es agnóstico de IDs e idempotente, y **no modifica** el árbol GLPI. Más `scripts/seed-groups.js` (22 grupos).
 JOIN típico al pushear ticket:
 `tickets.itilcategories_id` → `service_catalog_sync.responsable_label` → `aranda_groups (is_default_for_label=1)` → `GroupId` + `ResponsibleId`.
-El sync GLPI↔CSV es idempotente: reorganiza el árbol (13 grupos existentes bajo MDH id 658), crea grupos nuevos (727 Pago, 728 Rectificación, 729 Firma Digital, 730 Levante) y crea las 25 subs faltantes; re-correrlo no duplica nada.
+Verificación: `scripts/analyze-catalog-alignment.js` (GLPI ↔ Aranda) y `scripts/verify-catalog-sync.js` (cobertura en BD). Regenerar `CATALOGO.md`: `scripts/build-catalog-doc.js`.
+> ⚠️ Legacy: `scripts/sync-glpi-from-csv.js` está cableado a los IDs de la instancia vieja (MDH=658) y **reorganiza** el árbol GLPI. NO usar en una instancia nueva (preprod/prod) — usar `seed-catalog-local.js`.
 
 ### Adjuntos
 ```

@@ -1,617 +1,512 @@
 # Catálogo de Categorías — GLPI ↔ Aranda
 
-> Documento de referencia. La **fuente de verdad operativa** es `Libro1.utf8.csv` (export funcional Aranda).
-> El sync se ejecuta con `scripts/sync-glpi-from-csv.js` (idempotente). Ver `service_catalog_sync` en BD para el estado vivo.
+> Documento **generado automáticamente** por `scripts/build-catalog-doc.js` a partir de las dos fuentes autoritativas. No editar a mano: re-generar tras cambios en los CSV.
 
-**Fecha de captura:** 2026-06-10
-**Última sincronización:** 2026-06-11 (77 mapeos cargados, árbol GLPI bajo MDH reorganizado)
-**Origen GLPI:** `https://glpi.iammtechs.com/apirest.php` — todas las categorías ahora bajo MDH (id 658)
-**Origen Aranda:** `Libro1.utf8.csv` provisto por equipo funcional
+**Fecha de generación:** 2026-06-18
+**Fuente GLPI:** `glpi_categories.csv` (export de `glpi_itilcategories`, árbol bajo **MDH**)
+**Fuente Aranda:** `Libro1.utf8.csv` (export funcional, 2 niveles: Grupo → Sub Grupo, con código y tipo)
+
+**Alineación:** GLPI 16 grupos / 77 subcategorías ↔ Aranda 16 grupos / 77 subcategorías. Cruce 1:1 por nombre normalizado (sin acentos, espacios colapsados, case-insensitive); 100% de cobertura verificada con `scripts/analyze-catalog-alignment.js`.
 
 ---
 
-## 1. Catálogo GLPI
+## 1. Catálogo GLPI (árbol ITIL)
 
-**Tabla origen:** `glpi_itilcategories`
-**Campos relevantes:**
+Raíz: **MDH**. Cada subcategoría indica su visibilidad GLPI: **S** = Solicitud (`is_request`), **I** = Incidente (`is_incident`).
 
-| Campo | Descripción |
-|---|---|
-| `completename` | Nombre jerárquico (`Padre > Hijo`) |
-| `groups_id` | Grupo técnico asignado |
-| `users_id` | Técnico a cargo |
-| `is_helpdeskvisible` | Visible en Helpdesk |
-| `is_request` | Visible para Solicitud |
-| `is_incident` | Visible para Incidente |
-| `is_problem` | Visible para Problema |
-| `is_change` | Visible para Cambio |
-| `id` | Identificador único |
-| `code` | Código corto (no usado en este export) |
+### 1.1 Problema al modificar la DUA posterior a la aceptación
 
-### 1.1 Categorías raíz (Nivel 0)
+| Subcategoría | Vis. |
+|---|:--:|
+| No permite modificar un campo | I |
+| Permite modificar un campo, pero no se refleja el ajuste | I |
 
-| ID | Nombre |
-|---:|---|
-| 658 | MDH |
+### 1.2 Problemas al Guardar / Almacenar
 
-### 1.2 Categorías Nivel 1 (Hijas de MDH)
+| Subcategoría | Vis. |
+|---|:--:|
+| Problemas al intentar guardar o recuperar borradores/versiones de la DUA | I |
 
-| ID | Nombre |
-|---:|---|
-| 659 | Problemas Asociados a la Selectividad |
-| 662 | Problemas con Llenado y Aceptación |
-| 664 | Problemas de Acceso |
-| 668 | Consulta sobre el Manual de Procedimientos Aduaneros |
-| 671 | Problemas desarrollador API |
-| 673 | Problemas en Proceso de Tránsito |
-| 679 | Problema al modificar la DUA posterior a la aceptación |
-| 682 | Problemas al Guardar / Almacenar |
-| 683 | Problemas al Guardar / Almacenar *(duplicado)* |
-| 684 | Problemas Asociados a la Infraestructura IT (Oculta) |
-| 696 | Problemas con el cálculo de la Liquidación |
-| 709 | Problemas de Anotación de Salida |
-| 712 | Problemas de Asociación de Documentos LPCO |
+### 1.3 Problemas Asociados a la Infraestructura IT (Oculta)
 
-> ⚠️ **Observación:** los IDs 682 y 683 aparecen como duplicados textuales (`Problemas al Guardar / Almacenar`). Validar con funcional antes del sync.
+| Subcategoría | Vis. |
+|---|:--:|
+| Escalabilidad: Se determina que el problema le corresponde resolverlo a la DTIC a nivel Infraestructura IT | I |
 
-### 1.3 Categorías Nivel 2 (Detalle completo)
+### 1.4 Problemas Asociados a la Selectividad
 
-> Todas las categorías son visibles en Helpdesk y para Solicitud, Incidente, Problema y Cambio.
+| Subcategoría | Vis. |
+|---|:--:|
+| Problema Técnico a la hora del crear una regla. (Los usuarios serán la DGR) | I |
+| No se generó el Levante automático | I |
+| No se visualiza el aforador asignado | I |
+| Problemas con la notificación recibida por correo | I |
+| Problemas con las observaciones | I |
+| Problemas en el enrutamiento del DUA | I |
+| Problemas en la reasignación de DUAs | I |
+| Problemas técnicos por parte del aforador | S |
+| Se detecta un problema en la regla o se requiere ajustar la regla. (Ej: Regla mal hecha, bajar la selectividad) | S |
+| Dificultades relacionadas al proceso de impugnación sobre el aforo realizado | I |
+| Problemas asociados a la selección o cargas de trabajo y asignación de aforador | I |
 
-#### 1.3.1 Problemas Asociados a la Selectividad
+### 1.5 Problemas con el cálculo de la Liquidación
 
-| ID | Subcategoría |
-|---:|---|
-| 660 | Problemas técnicos por parte del aforador |
-| 661 | Se detecta un problema en la regla o se requiere ajustar la regla. |
-| 687 | Problema Técnico a la hora del crear una regla. (Los usuarios serán la DGR) |
-| 688 | No se generó el Levante automático |
-| 689 | No se visualiza el aforador asignado |
-| 690 | Problemas con la notificación recibida por correo |
-| 691 | Problemas con las observaciones |
-| 692 | Problemas en el enrutamiento del DUA |
-| 693 | Problemas en la reasignación de DUAs |
-| 694 | Dificultades relacionadas al proceso de impugnación sobre el aforo realizado |
-| 695 | Problemas asociados a la selección o cargas de trabajo y asignación de aforador |
+| Subcategoría | Vis. |
+|---|:--:|
+| Error en el cálculo de la liquidación | I |
+| Se determina que el error esta en ATENA (endopint de API) | I |
+| Escalamiento: Error en tipo de cambio, verificar interoperabilidad con BCCR | I |
+| Escalamiento: Se evidencia un error en la fórmula o incisos arancelarios sin actualizar | I |
+| Se determina que el error esta en el API del cliente que generó el DUA, se insta a comunicarse con su proveedor | I |
 
-#### 1.3.2 Problemas con Llenado y Aceptación
+### 1.6 Problemas con Llenado y Aceptación
 
-| ID | Subcategoría |
-|---:|---|
-| 663 | Consulta sobre llenado de un campo específico |
-| 702 | No existe claridad sobre el error que genera el sistema |
-| 703 | El sistema no acepta la declaración o la acepta y no numera. |
-| 704 | El sistema no permite editar el DUA después de haberlo guardado |
-| 705 | Faltan opciones en un combo box |
+| Subcategoría | Vis. |
+|---|:--:|
+| No existe claridad sobre el error que genera el sistema | I |
+| El sistema no acepta la declaración o la acepta y no numera. | I |
+| El sistema no permite editar el DUA después de haberlo guardado | I |
+| Faltan opciones en un combo box | I |
+| Consulta sobre llenado de un campo específico | S |
 
-#### 1.3.3 Problemas de Acceso
+### 1.7 Problemas de Acceso
 
-| ID | Subcategoría |
-|---:|---|
-| 665 | Autorización de cuentas de Usuario |
-| 666 | Escalabilidad: Restablecimiento de contraseña por olvido o bloqueo |
-| 667 | Solicitud y asignación de Perfil de Acceso |
-| 676 | La solicitud Implica Activación Usuario Contingencia — Mesa valida documento de identidad |
-| 677 | La solicitud Implica Activación Usuario Contingencia — DGA valorar si corresponde |
-| 678 | La solicitud Implica Activación Usuario Contingencia — DTIC Notifica al solicitante con usuario y contraseña |
-| 706 | No se puede ingresar a Atena (error de autenticación, plataforma no disponible). |
-| 707 | Problemas con la asignación de perfiles |
-| 708 | Problemas con el Perfil asignado |
+| Subcategoría | Vis. |
+|---|:--:|
+| No se puede ingresar a Atena (error de autenticación, plataforma no disponible). | I |
+| Problemas con la asignación de perfiles | I |
+| Problemas con el Perfil asignado | I |
+| Autorización de cuentas de Usuario | S |
+| Escalabilidad: Restablecimiento de contraseña por olvido o bloqueo | S |
+| Solicitud y asignación de Perfil de Acceso | S |
+| La solicitud Implica Activación Usuario Contingencia Mesa valida que la solicitud venga con el documento de identidad adjunto por ambos lados. | S |
+| La solicitud Implica Activación Usuario Contingencia DGA valorar si corresponde | S |
+| La solicitud Implica Activación Usuario Contingencia DTIC Notifica al solicitante con el usuario y contraseña | S |
 
-#### 1.3.4 Consulta sobre el Manual de Procedimientos Aduaneros
+### 1.8 Problemas de Anotación de Salida
 
-| ID | Subcategoría |
-|---:|---|
-| 669 | Consultas sobre el Manual de Procedimientos Aduaneros o Circulares, Directrices y Resoluciones recientes |
-| 670 | Escalamiento solo cuando existen consultas sobre el manual de procedimientos aduaneros, LGA - Ley General de Aduanas, RLGA - Reglamento Ley General de Aduanas o novedades sobre Circulares o Directrices |
+| Subcategoría | Vis. |
+|---|:--:|
+| El sistema no permite registrar la salida efectiva de la mercancía | I |
+| En segmento Boletín de Liquidación no se genera el link para generar la anotación de salida | I |
 
-#### 1.3.5 Problemas desarrollador API
+### 1.9 Problemas de Asociación de Documentos LPCO
 
-| ID | Subcategoría |
-|---:|---|
-| 672 | Consultas sobre documentación del API |
+| Subcategoría | Vis. |
+|---|:--:|
+| Consultar sobre el tipo de documento LPCO requerido para una operación específica. | I |
+| Error al intentar adjuntar, vincular o visualizar un documento LPCO. | I |
+| Escalabilidad: Falla en la conexión de interoperabilidad de ATENA con el organismo emisor del LPCO. (Problemas endpoint) | I |
+| Se detectan problemas de validación al asociar un LPCO | I |
+| LPCO aprobado por organismo emisor pero no esta en ATENA | I |
+| Problemas al solicitar un permiso en el módulo LPCO | I |
+| Problemas en el módulo LPCO al aprobar un permiso (Usuario: DGT - Estadística y Registro o Aduanas) | I |
+| Problemas en el módulo LPCO con el registro del permiso por parte del ente emisor. (Ejemplo Ministerio de Seguridad, OFINASE, que no usan ninguna plataforma) | I |
+| Escalabilidad: Se determina problemas en la digitación del permiso aprobado en el módulo LPCO por parte del ente emisor. (Ejemplo Ministerio de Seguridad, OFINASE) | I |
+| Escalabilidad: Se detecta que el problema de interoperabilidad esta del lado de las instituciones y no del Consorcio | I |
+| Permiso solicitado en el módulo LPCO pendiente de aprobación por autoridad Aduanera | I |
+| Escalabilidad: Se determina que documento de identidad no esta registrado en ATENA | I |
+| Escalabilidad: Se determina que el problema le corresponde resolverlo a la DTIC | I |
 
-#### 1.3.6 Problemas en Proceso de Tránsito
+### 1.10 Problemas de Pago
 
-| ID | Subcategoría |
-|---:|---|
-| 674 | Imposibilidad de reportar incidencias en carretera |
+| Subcategoría | Vis. |
+|---|:--:|
+| Problemas con el envío, respuesta o visualización del pago | I |
+| Problemas de anulación del DUA | I |
+| Problemas con la cuenta bancaria | I |
+| Problemas para registrar la cuenta bancaria de un usuario en ATENA | I |
+| Escalamiento: Requiere registrar la cuenta bancaria a un usuario | I |
+| Escalamiento al Banco Central para validación técnica hasta conseguir la solución | I |
+| Escalamiento al area Técnica del MdH para validar si los servicios de API REST "tesoro digital" (Ej: Web Banking, SINPE) esta operativo | I |
 
-#### 1.3.7 Problema al modificar la DUA posterior a la aceptación
+### 1.11 Problemas desarrollador API
 
-| ID | Subcategoría |
-|---:|---|
-| 680 | No permite modificar un campo |
-| 681 | Permite modificar un campo, pero no se refleja el ajuste |
+| Subcategoría | Vis. |
+|---|:--:|
+| Falla en el metódo de autenticación o token API | I |
+| Falla en la integración o problemas con el API | I |
+| Consultas sobre documentación del API | S |
 
-#### 1.3.8 Problemas Asociados a la Infraestructura IT (Oculta)
+### 1.12 Consulta sobre el Manual de Procedimientos Aduaneros
 
-| ID | Subcategoría |
-|---:|---|
-| 685 | Escalabilidad: Se determina que el problema le corresponde resolverlo a la DTIC a nivel Infraestructura IT |
+| Subcategoría | Vis. |
+|---|:--:|
+| Consultas sobre el Manual de Procedimientos Aduaneros o Circulares, Directrices y Resoluciones recientes sobre ajustes al procedimiento en ATENA | S |
+| Escalamiento solo cuando existen consultas sobre el manual de procedimientos aduaneros, LGA - Ley General de Aduanas, RLGA - Reglamento Ley General de Aduanas o novedades sobre Circulares o Directrices (> 1 semana) | S |
 
-#### 1.3.9 Problemas con el cálculo de la Liquidación
+### 1.13 Problemas en el proceso de rectificacion
 
-| ID | Subcategoría |
-|---:|---|
-| 697 | Error en el cálculo de la liquidación |
-| 698 | Se determina que el error esta en ATENA (endopint de API) |
-| 699 | Escalamiento: Error en tipo de cambio, verificar interoperabilidad con BCCR |
-| 700 | Escalamiento: Se evidencia un error en la fórmula o incisos arancelarios sin actualizar |
-| 701 | Se determina que el error esta en el API del cliente que generó el DUA, se insta a comunicarse con su proveedor |
+| Subcategoría | Vis. |
+|---|:--:|
+| Se están definiendo las politicas de rectificación, después de confirmación | I |
 
-#### 1.3.10 Problemas de Anotación de Salida
+### 1.14 Problemas en la Firma Digital
 
-| ID | Subcategoría |
-|---:|---|
-| 710 | El sistema no permite registrar la salida efectiva de la mercancía |
-| 711 | En segmento Boletín de Liquidación no se genera el link para generar la anotación de salida |
+| Subcategoría | Vis. |
+|---|:--:|
+| Problemas para firmar digitalmente en ATENA | I |
+| Se detecta que el error es externo, se sensibiliza a contactar a su proveedor de firma digital | I |
+| Escalamiento al area Técnica del MdH para validar si la plataforma "hacienda autentica" esta operativa | I |
 
-#### 1.3.11 Problemas de Asociación de Documentos LPCO
+### 1.15 Problemas en Proceso de Levante
 
-| ID | Subcategoría |
-|---:|---|
-| 713 | Consultar sobre el tipo de documento LPCO requerido para una operación específica. |
-| 714 | Error al intentar adjuntar, vincular o visualizar un documento LPCO. |
-| 715 | Escalabilidad: Falla en la conexión de interoperabilidad de ATENA con el organismo emisor del LPCO |
-| 716 | Se detectan problemas de validación al asociar un LPCO |
-| 717 | LPCO aprobado por organismo emisor pero no esta en ATENA |
-| 718 | Problemas al solicitar un permiso en el módulo LPCO |
-| 719 | Problemas en el módulo LPCO al aprobar un permiso |
-| 720 | Problemas en el módulo LPCO con el registro del permiso por parte del ente emisor |
-| 721 | Escalabilidad: Se determina problemas en la digitación del permiso aprobado en el módulo LPCO por parte del ente emisor. |
-| 722 | Escalabilidad: Se detecta que el problema de interoperabilidad esta del lado de las instituciones y no del Consorcio |
-| 723 | Permiso solicitado en el módulo LPCO pendiente de aprobación por autoridad Aduanera |
-| 724 | Escalabilidad: Se determina que documento de identidad no esta registrado en ATENA |
-| 725 | Escalabilidad: Se determina que el problema le corresponde resolverlo a la DTIC |
+| Subcategoría | Vis. |
+|---|:--:|
+| El sistema no genera la autorización de levante | I |
+| Escalamiento: Se determina problema de interoperabilidad es de ATENA | I |
+| Escalamiento: Se determina problema de interoperabilidad es del Puerto | I |
+
+### 1.16 Problemas en Proceso de Tránsito
+
+| Subcategoría | Vis. |
+|---|:--:|
+| Problemas al tratar de dar inicio o fin al tránsito, o no actualización del estado de la DUA | I |
+| Problemas al tratar de modificar datos de tránsito | I |
+| El sistema no generó el comprobante de movilización | I |
+| El sistema no muestra la opción de Generar Tránsito (T1) | I |
+| El sistema no permite realizar la operación de agrupar DUAS para generar un solo Tránsito (T1) | I |
+| Imposibilidad de imprimir el comprobante de movilización | I |
+| Problemas para revisar una incidencia en tránsito y actualización de los estados (Usuario: Aduana) | I |
+| Imposibilidad de reportar incidencias en carretera Ejemplo: ocurrió el incidente y el usuario no sabe que hacer o no se le habilitó la funcionalidad de registrar incidencias | S |
+| Incidencia pendiente de autorización por parte de la Aduana | I |
 
 ---
 
 ## 2. Catálogo Aranda
 
-**Modelo Aranda:** dos niveles
-- **Nivel 1 = Grupo** (`Código Categoría Aranda Grupo`)
-- **Nivel 2 = Sub Grupo** (`Código Categoría Aranda Sub Grupo`)
+Modelo de 2 niveles. **Tipo** define el segmento del caso: Incidencia = segmento 1 (IM), Requerimiento = segmento 4 (RF).
 
-**Campo adicional:** `Tipo` (`Incidencia` vs `Requerimiento`) — define el **CaseType** en Aranda (segment `1`=IM, `4`=RF). Una misma subcategoría puede existir en ambos segmentos.
+### 2.1 Problema al modificar la DUA posterior a la aceptación (grupo 820)
 
-### 2.1 Grupos Aranda (Nivel 1)
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 821 | Incidencia | No permite modificar un campo | Consorcio - Mesa de Servicio N1 |
+| 822 | Incidencia | Permite modificar un campo, pero no se refleja el ajuste | Consorcio - Mesa de Servicio N1 |
 
-| Código Grupo | Nombre |
-|---:|---|
-| 820 | Problema al modificar la DUA posterior a la aceptación |
-| 823 | Problemas al Guardar / Almacenar |
-| 825 | Problemas Asociados a la Selectividad |
-| 835 | Problemas con el cálculo de la Liquidación |
-| 841 | Problemas con Llenado y Aceptación |
-| 846 | Problemas de Acceso |
-| 853 | Problemas de Anotación de Salida |
-| 856 | Problemas de Asociación de Documentos LPCO |
-| 869 | Problemas de Pago |
-| 875 | Problemas desarrollador API |
-| 879 | Problemas en el proceso de rectificacion |
-| 881 | Problemas en la Firma Digital |
-| 884 | Problemas en Proceso de Levante |
-| 888 | Problemas en Proceso de Tránsito |
-| 897 | Consulta sobre el Manual de Procedimientos Aduaneros |
-| 904 | Problemas de Pago (escalamiento) |
-| 907 | Problemas en la Firma Digital (escalamiento) |
-| 909 | Problemas de Asociación de Documentos LPCO (escalamiento) |
-| 911 | Problemas de Acceso (escalamiento) |
-| 913 | Problemas Asociados a la Infraestructura IT (Oculta) |
+### 2.2 Problemas al Guardar / Almacenar (grupo 823)
 
-> ⚠️ Aranda mantiene **grupos paralelos para escalamientos** (904, 907, 909, 911, 913). Esto NO existe en GLPI — habrá que decidir si esos casos mapean al grupo base o se marcan como subniveles.
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 824 | Incidencia | Problemas al intentar guardar o recuperar borradores/versiones de la DUA | Consorcio - Mesa de Servicio N1 |
 
-### 2.2 Subcategorías Aranda (Nivel 2)
+### 2.3 Problemas Asociados a la Infraestructura IT (Oculta) (grupo 913)
 
-#### 2.2.1 Problema al modificar la DUA posterior a la aceptación (Grupo 820)
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 914 | Incidencia | Escalabilidad: Se determina que el problema le corresponde resolverlo a la DTIC a nivel Infraestructura IT | Ministerio de Hacienda - DTIC |
 
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 821 | Incidencia | No permite modificar un campo |
-| 822 | Incidencia | Permite modificar un campo, pero no se refleja el ajuste |
+### 2.4 Problemas Asociados a la Selectividad (grupo 825)
 
-#### 2.2.2 Problemas al Guardar / Almacenar (Grupo 823)
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 827 | Incidencia | Problema Técnico a la hora del crear una regla. (Los usuarios serán la DGR) | Consorcio - Mesa de Servicio N1 |
+| 829 | Incidencia | No se generó el Levante automático | Consorcio - Mesa de Servicio N1 |
+| 830 | Incidencia | No se visualiza el aforador asignado | Consorcio - Mesa de Servicio N1 |
+| 831 | Incidencia | Problemas con la notificación recibida por correo | Consorcio - Mesa de Servicio N1 |
+| 832 | Incidencia | Problemas con las observaciones | Consorcio - Mesa de Servicio N1 |
+| 833 | Incidencia | Problemas en el enrutamiento del DUA | Consorcio - Mesa de Servicio N1 |
+| 834 | Incidencia | Problemas en la reasignación de DUAs | Consorcio - Mesa de Servicio N1 |
+| 900 | Requerimiento | Problemas técnicos por parte del aforador | Consorcio - Mesa de Servicio N1 |
+| 901 | Requerimiento | Se detecta un problema en la regla o se requiere ajustar la regla. (Ej: Regla mal hecha, bajar la selectividad) | Consorcio - Especialista N2 |
+| 826 | Incidencia | Dificultades relacionadas al proceso de impugnación sobre el aforo realizado | Ministerio de Hacienda - DGA -DGT |
+| 828 | Incidencia | Problemas asociados a la selección o cargas de trabajo y asignación de aforador | Ministerio de Hacienda - DGA -DGT |
 
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 824 | Incidencia | Problemas al intentar guardar o recuperar borradores/versiones de la DUA |
+### 2.5 Problemas con el cálculo de la Liquidación (grupo 835)
 
-#### 2.2.3 Problemas Asociados a la Selectividad (Grupo 825)
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 836 | Incidencia | Error en el cálculo de la liquidación | Consorcio - Mesa de Servicio N1 |
+| 838 | Incidencia | Se determina que el error esta en ATENA (endopint de API) | Consorcio - Mesa de Servicio N1 |
+| 840 | Incidencia | Escalamiento: Error en tipo de cambio, verificar interoperabilidad con BCCR | Consorcio - Mesa de Servicio N1 |
+| 837 | Incidencia | Escalamiento: Se evidencia un error en la fórmula o incisos arancelarios sin actualizar | Ministerio de Hacienda - DGA -DGT |
+| 839 | Incidencia | Se determina que el error esta en el API del cliente que generó el DUA, se insta a comunicarse con su proveedor | Ministerio de Hacienda - DTIC |
 
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 826 | Incidencia | Dificultades relacionadas al proceso de impugnación sobre el aforo realizado |
-| 827 | Incidencia | Problema Técnico a la hora del crear una regla. (Los usuarios serán la DGR) |
-| 828 | Incidencia | Problemas asociados a la selección o cargas de trabajo y asignación de aforador |
-| 829 | Incidencia | No se generó el Levante automático |
-| 830 | Incidencia | No se visualiza el aforador asignado |
-| 831 | Incidencia | Problemas con la notificación recibida por correo |
-| 832 | Incidencia | Problemas con las observaciones |
-| 833 | Incidencia | Problemas en el enrutamiento del DUA |
-| 834 | Incidencia | Problemas en la reasignación de DUAs |
-| 900 | Requerimiento | Problemas técnicos por parte del aforador |
-| 901 | Requerimiento | Se detecta un problema en la regla o se requiere ajustar la regla. (Ej: Regla mal hecha, bajar la selectividad) |
+### 2.6 Problemas con Llenado y Aceptación (grupo 841)
 
-#### 2.2.4 Problemas con el cálculo de la Liquidación (Grupo 835)
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 842 | Incidencia | No existe claridad sobre el error que genera el sistema | Consorcio - Mesa de Servicio N1 |
+| 843 | Incidencia | El sistema no acepta la declaración o la acepta y no numera. | Consorcio - Mesa de Servicio N1 |
+| 844 | Incidencia | El sistema no permite editar el DUA después de haberlo guardado | Consorcio - Mesa de Servicio N1 |
+| 845 | Incidencia | Faltan opciones en un combo box | Consorcio - Mesa de Servicio N1 |
+| 902 | Requerimiento | Consulta sobre llenado de un campo específico | Consorcio - Mesa de Servicio N1 |
 
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 836 | Incidencia | Error en el cálculo de la liquidación |
-| 837 | Incidencia | Escalamiento: Se evidencia un error en la fórmula o incisos arancelarios sin actualizar |
-| 838 | Incidencia | Se determina que el error esta en ATENA (endopint de API) |
-| 839 | Incidencia | Se determina que el error esta en el API del cliente que generó el DUA, se insta a comunicarse con su proveedor |
-| 840 | Incidencia | Escalamiento: Error en tipo de cambio, verificar interoperabilidad con BCCR |
+### 2.7 Problemas de Acceso (grupo 846)
 
-#### 2.2.5 Problemas con Llenado y Aceptación (Grupo 841)
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 847 | Incidencia | No se puede ingresar a Atena (error de autenticación, plataforma no disponible). | Consorcio - Mesa de Servicio N1 |
+| 849 | Incidencia | Problemas con la asignación de perfiles | Consorcio - Mesa de Servicio N1 |
+| 848 | Incidencia | Problemas con el Perfil asignado | Ministerio de Hacienda - DGA -DGT |
+| 850 | Requerimiento | Autorización de cuentas de Usuario | Ministerio de Hacienda - DGA -DGT |
+| 912 | Requerimiento | Escalabilidad: Restablecimiento de contraseña por olvido o bloqueo | Ministerio de Hacienda - DTIC |
+| 852 | Requerimiento | Solicitud y asignación de Perfil de Acceso | Consorcio - Mesa de Servicio N1 |
+| 926 | Requerimiento | La solicitud Implica Activación Usuario Contingencia Mesa valida que la solicitud venga con el documento de identidad adjunto por ambos lados. | Consorcio - Mesa de Servicio N1 |
+| 927 | Requerimiento | La solicitud Implica Activación Usuario Contingencia DGA valorar si corresponde | Ministerio de Hacienda - DGA -DGT |
+| 928 | Requerimiento | La solicitud Implica Activación Usuario Contingencia DTIC Notifica al solicitante con el usuario y contraseña | Ministerio de Hacienda - DTIC |
 
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 842 | Incidencia | No existe claridad sobre el error que genera el sistema |
-| 843 | Incidencia | El sistema no acepta la declaración o la acepta y no numera. |
-| 844 | Incidencia | El sistema no permite editar el DUA después de haberlo guardado |
-| 845 | Incidencia | Faltan opciones en un combo box |
-| 902 | Requerimiento | Consulta sobre llenado de un campo específico |
+### 2.8 Problemas de Anotación de Salida (grupo 853)
 
-#### 2.2.6 Problemas de Acceso (Grupo 846)
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 854 | Incidencia | El sistema no permite registrar la salida efectiva de la mercancía | Consorcio - Mesa de Servicio N1 |
+| 855 | Incidencia | En segmento Boletín de Liquidación no se genera el link para generar la anotación de salida | Consorcio - Mesa de Servicio N1 |
 
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 847 | Incidencia | No se puede ingresar a Atena (error de autenticación, plataforma no disponible). |
-| 848 | Incidencia | Problemas con el Perfil asignado |
-| 849 | Incidencia | Problemas con la asignación de perfiles |
-| 850 | Requerimiento | Autorización de cuentas de Usuario |
-| 852 | Requerimiento | Solicitud y asignación de Perfil de Acceso |
-| 926 | Requerimiento | La solicitud Implica Activación Usuario Contingencia — Mesa valida documento de identidad |
-| 927 | Requerimiento | La solicitud Implica Activación Usuario Contingencia — DGA valorar si corresponde |
+### 2.9 Problemas de Asociación de Documentos LPCO (grupo 856)
 
-#### 2.2.7 Problemas de Acceso (escalamiento, Grupo 911)
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 857 | Incidencia | Consultar sobre el tipo de documento LPCO requerido para una operación específica. | Consorcio - Mesa de Servicio N1 |
+| 858 | Incidencia | Error al intentar adjuntar, vincular o visualizar un documento LPCO. | Consorcio - Mesa de Servicio N1 |
+| 859 | Incidencia | Escalabilidad: Falla en la conexión de interoperabilidad de ATENA con el organismo emisor del LPCO. (Problemas endpoint) | Consorcio - Mesa de Servicio N1 |
+| 862 | Incidencia | Se detectan problemas de validación al asociar un LPCO | Consorcio - Mesa de Servicio N1 |
+| 865 | Incidencia | LPCO aprobado por organismo emisor pero no esta en ATENA | Consorcio - Mesa de Servicio N1 |
+| 866 | Incidencia | Problemas al solicitar un permiso en el módulo LPCO | Consorcio - Mesa de Servicio N1 |
+| 867 | Incidencia | Problemas en el módulo LPCO al aprobar un permiso (Usuario: DGT - Estadística y Registro o Aduanas) | Consorcio - Mesa de Servicio N1 |
+| 868 | Incidencia | Problemas en el módulo LPCO con el registro del permiso por parte del ente emisor. (Ejemplo Ministerio de Seguridad, OFINASE, que no usan ninguna plataforma) | Consorcio - Mesa de Servicio N1 |
+| 863 | Incidencia | Escalabilidad: Se determina problemas en la digitación del permiso aprobado en el módulo LPCO por parte del ente emisor. (Ejemplo Ministerio de Seguridad, OFINASE) | Ministerio de Hacienda - DGA -DGT |
+| 860 | Incidencia | Escalabilidad: Se detecta que el problema de interoperabilidad esta del lado de las instituciones y no del Consorcio | Ministerio de Hacienda - DGA -DGT |
+| 861 | Incidencia | Permiso solicitado en el módulo LPCO pendiente de aprobación por autoridad Aduanera | Ministerio de Hacienda - DGA -DGT |
+| 864 | Incidencia | Escalabilidad: Se determina que documento de identidad no esta registrado en ATENA | Ministerio de Hacienda - DGA -DGT |
+| 910 | Incidencia | Escalabilidad: Se determina que el problema le corresponde resolverlo a la DTIC | Ministerio de Hacienda - DTIC |
 
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 912 | Requerimiento | Escalabilidad: Restablecimiento de contraseña por olvido o bloqueo |
-| 928 | Requerimiento | La solicitud Implica Activación Usuario Contingencia — DTIC Notifica al solicitante con usuario y contraseña |
+### 2.10 Problemas de Pago (grupo 869)
 
-#### 2.2.8 Problemas de Anotación de Salida (Grupo 853)
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 870 | Incidencia | Problemas con el envío, respuesta o visualización del pago | Consorcio - Mesa de Servicio N1 |
+| 871 | Incidencia | Problemas de anulación del DUA | Consorcio - Mesa de Servicio N1 |
+| 873 | Incidencia | Problemas con la cuenta bancaria | Consorcio - Mesa de Servicio N1 |
+| 874 | Incidencia | Problemas para registrar la cuenta bancaria de un usuario en ATENA | Consorcio - Mesa de Servicio N1 |
+| 872 | Incidencia | Escalamiento: Requiere registrar la cuenta bancaria a un usuario | Ministerio de Hacienda - DGA -DGT |
+| 906 | Incidencia | Escalamiento al Banco Central para validación técnica hasta conseguir la solución | Ministerio de Hacienda - DTIC |
+| 905 | Incidencia | Escalamiento al area Técnica del MdH para validar si los servicios de API REST "tesoro digital" (Ej: Web Banking, SINPE) esta operativo | Ministerio de Hacienda - DTIC |
 
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 854 | Incidencia | El sistema no permite registrar la salida efectiva de la mercancía |
-| 855 | Incidencia | En segmento Boletín de Liquidación no se genera el link para generar la anotación de salida |
+### 2.11 Problemas desarrollador API (grupo 875)
 
-#### 2.2.9 Problemas de Asociación de Documentos LPCO (Grupo 856)
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 876 | Incidencia | Falla en el metódo de autenticación o token API | Consorcio - Mesa de Servicio N1 |
+| 877 | Incidencia | Falla en la integración o problemas con el API | Consorcio - Mesa de Servicio N1 |
+| 925 | Requerimiento | Consultas sobre documentación del API | Consorcio - Mesa de Servicio N1 |
 
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 857 | Incidencia | Consultar sobre el tipo de documento LPCO requerido para una operación específica. |
-| 858 | Incidencia | Error al intentar adjuntar, vincular o visualizar un documento LPCO. |
-| 859 | Incidencia | Escalabilidad: Falla en la conexión de interoperabilidad de ATENA con el organismo emisor del LPCO. (Problemas endpoint) |
-| 860 | Incidencia | Escalabilidad: Se detecta que el problema de interoperabilidad esta del lado de las instituciones y no del Consorcio |
-| 861 | Incidencia | Permiso solicitado en el módulo LPCO pendiente de aprobación por autoridad Aduanera |
-| 862 | Incidencia | Se detectan problemas de validación al asociar un LPCO |
-| 863 | Incidencia | Escalabilidad: Se determina problemas en la digitación del permiso aprobado en el módulo LPCO |
-| 864 | Incidencia | Escalabilidad: Se determina que documento de identidad no esta registrado en ATENA |
-| 865 | Incidencia | LPCO aprobado por organismo emisor pero no esta en ATENA |
-| 866 | Incidencia | Problemas al solicitar un permiso en el módulo LPCO |
-| 867 | Incidencia | Problemas en el módulo LPCO al aprobar un permiso (Usuario: DGT - Estadística y Registro o Aduanas) |
-| 868 | Incidencia | Problemas en el módulo LPCO con el registro del permiso por parte del ente emisor |
+### 2.12 Consulta sobre el Manual de Procedimientos Aduaneros (grupo 897)
 
-#### 2.2.10 Problemas de Asociación de Documentos LPCO (escalamiento, Grupo 909)
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 898 | Requerimiento | Consultas sobre el Manual de Procedimientos Aduaneros o Circulares, Directrices y Resoluciones recientes sobre ajustes al procedimiento en ATENA | Consorcio - Mesa de Servicio N1 |
+| 899 | Requerimiento | Escalamiento solo cuando existen consultas sobre el manual de procedimientos aduaneros, LGA - Ley General de Aduanas, RLGA - Reglamento Ley General de Aduanas o novedades sobre Circulares o Directrices (> 1 semana) | Ministerio de Hacienda - DGA -DGT |
 
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 910 | Incidencia | Escalabilidad: Se determina que el problema le corresponde resolverlo a la DTIC |
+### 2.13 Problemas en el proceso de rectificacion (grupo 879)
 
-#### 2.2.11 Problemas de Pago (Grupo 869)
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 880 | Incidencia | Se están definiendo las politicas de rectificación, después de confirmación | Consorcio - Mesa de Servicio N1 |
 
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 870 | Incidencia | Problemas con el envío, respuesta o visualización del pago |
-| 871 | Incidencia | Problemas de anulación del DUA |
-| 872 | Incidencia | Escalamiento: Requiere registrar la cuenta bancaria a un usuario |
-| 873 | Incidencia | Problemas con la cuenta bancaria |
-| 874 | Incidencia | Problemas para registrar la cuenta bancaria de un usuario en ATENA |
+### 2.14 Problemas en la Firma Digital (grupo 881)
 
-#### 2.2.12 Problemas de Pago (escalamiento, Grupo 904)
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 882 | Incidencia | Problemas para firmar digitalmente en ATENA | Consorcio - Mesa de Servicio N1 |
+| 883 | Incidencia | Se detecta que el error es externo, se sensibiliza a contactar a su proveedor de firma digital | Consorcio - Mesa de Servicio N1 |
+| 908 | Incidencia | Escalamiento al area Técnica del MdH para validar si la plataforma "hacienda autentica" esta operativa | Ministerio de Hacienda - DTIC |
 
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 905 | Incidencia | Escalamiento al área Técnica del MdH para validar si los servicios de API REST "tesoro digital" (Ej: Web Banking, SINPE) está operativo |
-| 906 | Incidencia | Escalamiento al Banco Central para validación técnica hasta conseguir la solución |
+### 2.15 Problemas en Proceso de Levante (grupo 884)
 
-#### 2.2.13 Problemas desarrollador API (Grupo 875)
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 885 | Incidencia | El sistema no genera la autorización de levante | Consorcio - Mesa de Servicio N1 |
+| 886 | Incidencia | Escalamiento: Se determina problema de interoperabilidad es de ATENA | Consorcio - Mesa de Servicio N1 |
+| 887 | Incidencia | Escalamiento: Se determina problema de interoperabilidad es del Puerto | Ministerio de Hacienda - Aduanas |
 
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 876 | Incidencia | Falla en el método de autenticación o token API |
-| 877 | Incidencia | Falla en la integración o problemas con el API |
-| 925 | Requerimiento | Consultas sobre documentación del API |
+### 2.16 Problemas en Proceso de Tránsito (grupo 888)
 
-#### 2.2.14 Problemas en el proceso de rectificacion (Grupo 879)
-
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 880 | Incidencia | Se están definiendo las políticas de rectificación, después de confirmación |
-
-#### 2.2.15 Problemas en la Firma Digital (Grupo 881)
-
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 882 | Incidencia | Problemas para firmar digitalmente en ATENA |
-| 883 | Incidencia | Se detecta que el error es externo, se sensibiliza a contactar a su proveedor de firma digital |
-
-#### 2.2.16 Problemas en la Firma Digital (escalamiento, Grupo 907)
-
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 908 | Incidencia | Escalamiento al área Técnica del MdH para validar si la plataforma "hacienda autentica" está operativa |
-
-#### 2.2.17 Problemas en Proceso de Levante (Grupo 884)
-
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 885 | Incidencia | El sistema no genera la autorización de levante |
-| 886 | Incidencia | Escalamiento: Se determina problema de interoperabilidad es de ATENA |
-| 887 | Incidencia | Escalamiento: Se determina problema de interoperabilidad es del Puerto |
-
-#### 2.2.18 Problemas en Proceso de Tránsito (Grupo 888)
-
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 889 | Incidencia | Incidencia pendiente de autorización por parte de la Aduana |
-| 890 | Incidencia | Problemas al tratar de dar inicio o fin al tránsito, o no actualización del estado de la DUA |
-| 891 | Incidencia | Problemas al tratar de modificar datos de tránsito |
-| 892 | Incidencia | El sistema no generó el comprobante de movilización |
-| 893 | Incidencia | El sistema no muestra la opción de Generar Tránsito (T1) |
-| 894 | Incidencia | El sistema no permite realizar la operación de agrupar DUAS para generar un solo Tránsito (T1) |
-| 895 | Incidencia | Imposibilidad de imprimir el comprobante de movilización |
-| 896 | Incidencia | Problemas para revisar una incidencia en tránsito y actualización de los estados (Usuario: Aduana) |
-| 903 | Requerimiento | Imposibilidad de reportar incidencias en carretera |
-
-#### 2.2.19 Consulta sobre el Manual de Procedimientos Aduaneros (Grupo 897)
-
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 898 | Requerimiento | Consultas sobre el Manual de Procedimientos Aduaneros o Circulares, Directrices y Resoluciones recientes |
-| 899 | Requerimiento | Escalamiento solo cuando existen consultas sobre el manual de procedimientos aduaneros, LGA, RLGA o novedades sobre Circulares o Directrices (> 1 semana) |
-
-#### 2.2.20 Problemas Asociados a la Infraestructura IT (Oculta, Grupo 913)
-
-| Sub | Tipo | Nombre |
-|---:|---|---|
-| 914 | Incidencia | Escalabilidad: Se determina que el problema le corresponde resolverlo a la DTIC a nivel Infraestructura IT |
+| Cód. Sub | Tipo | Subcategoría | Responsable |
+|---:|---|---|---|
+| 890 | Incidencia | Problemas al tratar de dar inicio o fin al tránsito, o no actualización del estado de la DUA | Consorcio - Mesa de Servicio N1 |
+| 891 | Incidencia | Problemas al tratar de modificar datos de tránsito | Consorcio - Mesa de Servicio N1 |
+| 892 | Incidencia | El sistema no generó el comprobante de movilización | Consorcio - Mesa de Servicio N1 |
+| 893 | Incidencia | El sistema no muestra la opción de Generar Tránsito (T1) | Consorcio - Mesa de Servicio N1 |
+| 894 | Incidencia | El sistema no permite realizar la operación de agrupar DUAS para generar un solo Tránsito (T1) | Consorcio - Mesa de Servicio N1 |
+| 895 | Incidencia | Imposibilidad de imprimir el comprobante de movilización | Consorcio - Mesa de Servicio N1 |
+| 896 | Incidencia | Problemas para revisar una incidencia en tránsito y actualización de los estados (Usuario: Aduana) | Consorcio - Mesa de Servicio N1 |
+| 903 | Requerimiento | Imposibilidad de reportar incidencias en carretera Ejemplo: ocurrió el incidente y el usuario no sabe que hacer o no se le habilitó la funcionalidad de registrar incidencias | Consorcio - Mesa de Servicio N1 |
+| 889 | Incidencia | Incidencia pendiente de autorización por parte de la Aduana | Ministerio de Hacienda - DGA -DGT |
 
 ---
 
-## 3. Mapeo propuesto GLPI ↔ Aranda
+## 3. Mapeo GLPI ↔ Aranda (por nombre)
 
-> Mapeo **textual derivado** del cruce de ambos catálogos. Cada fila se valida por
-> **coincidencia exacta de nombre de subcategoría**. Los casos donde Aranda divide
-> el grupo en "base + escalamiento" se documentan en notas.
+Cada subcategoría GLPI se traduce a un código Aranda + segmento. Esta es la relación que carga `service_catalog_sync` (ver `scripts/seed-catalog-local.js`).
 
-### 3.1 Mapeo por Grupos (Nivel 1)
+### 3.1 Problema al modificar la DUA posterior a la aceptación
 
-| GLPI ID | GLPI Nombre | Aranda Grupo | Notas |
-|---:|---|---:|---|
-| 659 | Problemas Asociados a la Selectividad | 825 | 1:1 |
-| 662 | Problemas con Llenado y Aceptación | 841 | 1:1 |
-| 664 | Problemas de Acceso | 846 (+ 911 escal.) | Aranda divide en grupo base y grupo de escalamiento |
-| 668 | Consulta sobre el Manual de Procedimientos Aduaneros | 897 | 1:1 |
-| 671 | Problemas desarrollador API | 875 | 1:1 |
-| 673 | Problemas en Proceso de Tránsito | 888 | 1:1 |
-| 679 | Problema al modificar la DUA posterior a la aceptación | 820 | 1:1 |
-| 682 / 683 | Problemas al Guardar / Almacenar | 823 | Validar duplicado en GLPI |
-| 684 | Problemas Asociados a la Infraestructura IT (Oculta) | 913 | 1:1 |
-| 696 | Problemas con el cálculo de la Liquidación | 835 | 1:1 |
-| 709 | Problemas de Anotación de Salida | 853 | 1:1 |
-| 712 | Problemas de Asociación de Documentos LPCO | 856 (+ 909 escal.) | Aranda divide en grupo base y grupo de escalamiento |
-| — | *(sin equivalente GLPI)* | 869 / 904 | Problemas de Pago — falta en GLPI |
-| — | *(sin equivalente GLPI)* | 879 | Problemas en el proceso de rectificación — falta en GLPI |
-| — | *(sin equivalente GLPI)* | 881 / 907 | Problemas en la Firma Digital — falta en GLPI |
-| — | *(sin equivalente GLPI)* | 884 | Problemas en Proceso de Levante — falta en GLPI |
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| No permite modificar un campo | 821 | 1 (IM) |
+| Permite modificar un campo, pero no se refleja el ajuste | 822 | 1 (IM) |
 
-> ⚠️ **Grupos huérfanos en Aranda**: Pago (869/904), Rectificación (879), Firma Digital (881/907) y Levante (884) no tienen padre directo en GLPI. Hay que coordinar con funcional si crear esas categorías en GLPI o cómo manejarlas.
+### 3.2 Problemas al Guardar / Almacenar
 
-### 3.2 Mapeo por Subcategorías (Nivel 2)
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| Problemas al intentar guardar o recuperar borradores/versiones de la DUA | 824 | 1 (IM) |
 
-> Cada fila es **una traducción directa por nombre**. La columna `Tipo Aranda` indica
-> si el caso debe abrirse como IM (Incidencia, segment 1) o RF (Requerimiento, segment 4).
+### 3.3 Problemas Asociados a la Infraestructura IT (Oculta)
 
-#### Problema al modificar la DUA posterior a la aceptación
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| Escalabilidad: Se determina que el problema le corresponde resolverlo a la DTIC a nivel Infraestructura IT | 914 | 1 (IM) |
 
-| GLPI | Aranda Sub | Tipo |
-|---:|---:|---|
-| 680 | 821 | Incidencia |
-| 681 | 822 | Incidencia |
+### 3.4 Problemas Asociados a la Selectividad
 
-#### Problemas Asociados a la Selectividad
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| Problema Técnico a la hora del crear una regla. (Los usuarios serán la DGR) | 827 | 1 (IM) |
+| No se generó el Levante automático | 829 | 1 (IM) |
+| No se visualiza el aforador asignado | 830 | 1 (IM) |
+| Problemas con la notificación recibida por correo | 831 | 1 (IM) |
+| Problemas con las observaciones | 832 | 1 (IM) |
+| Problemas en el enrutamiento del DUA | 833 | 1 (IM) |
+| Problemas en la reasignación de DUAs | 834 | 1 (IM) |
+| Problemas técnicos por parte del aforador | 900 | 4 (RF) |
+| Se detecta un problema en la regla o se requiere ajustar la regla. (Ej: Regla mal hecha, bajar la selectividad) | 901 | 4 (RF) |
+| Dificultades relacionadas al proceso de impugnación sobre el aforo realizado | 826 | 1 (IM) |
+| Problemas asociados a la selección o cargas de trabajo y asignación de aforador | 828 | 1 (IM) |
 
-| GLPI | Aranda Sub | Tipo |
-|---:|---:|---|
-| 660 | 900 | Requerimiento |
-| 661 | 901 | Requerimiento |
-| 687 | 827 | Incidencia |
-| 688 | 829 | Incidencia |
-| 689 | 830 | Incidencia |
-| 690 | 831 | Incidencia |
-| 691 | 832 | Incidencia |
-| 692 | 833 | Incidencia |
-| 693 | 834 | Incidencia |
-| 694 | 826 | Incidencia |
-| 695 | 828 | Incidencia |
+### 3.5 Problemas con el cálculo de la Liquidación
 
-#### Problemas con Llenado y Aceptación
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| Error en el cálculo de la liquidación | 836 | 1 (IM) |
+| Se determina que el error esta en ATENA (endopint de API) | 838 | 1 (IM) |
+| Escalamiento: Error en tipo de cambio, verificar interoperabilidad con BCCR | 840 | 1 (IM) |
+| Escalamiento: Se evidencia un error en la fórmula o incisos arancelarios sin actualizar | 837 | 1 (IM) |
+| Se determina que el error esta en el API del cliente que generó el DUA, se insta a comunicarse con su proveedor | 839 | 1 (IM) |
 
-| GLPI | Aranda Sub | Tipo |
-|---:|---:|---|
-| 663 | 902 | Requerimiento |
-| 702 | 842 | Incidencia |
-| 703 | 843 | Incidencia |
-| 704 | 844 | Incidencia |
-| 705 | 845 | Incidencia |
+### 3.6 Problemas con Llenado y Aceptación
 
-#### Problemas de Acceso
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| No existe claridad sobre el error que genera el sistema | 842 | 1 (IM) |
+| El sistema no acepta la declaración o la acepta y no numera. | 843 | 1 (IM) |
+| El sistema no permite editar el DUA después de haberlo guardado | 844 | 1 (IM) |
+| Faltan opciones en un combo box | 845 | 1 (IM) |
+| Consulta sobre llenado de un campo específico | 902 | 4 (RF) |
 
-| GLPI | Aranda Sub | Tipo | Grupo Aranda |
-|---:|---:|---|---:|
-| 665 | 850 | Requerimiento | 846 |
-| 666 | 912 | Requerimiento | 911 (escal.) |
-| 667 | 852 | Requerimiento | 846 |
-| 676 | 926 | Requerimiento | 846 |
-| 677 | 927 | Requerimiento | 846 |
-| 678 | 928 | Requerimiento | 911 (escal.) |
-| 706 | 847 | Incidencia | 846 |
-| 707 | 849 | Incidencia | 846 |
-| 708 | 848 | Incidencia | 846 |
+### 3.7 Problemas de Acceso
 
-#### Consulta sobre el Manual de Procedimientos Aduaneros
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| No se puede ingresar a Atena (error de autenticación, plataforma no disponible). | 847 | 1 (IM) |
+| Problemas con la asignación de perfiles | 849 | 1 (IM) |
+| Problemas con el Perfil asignado | 848 | 1 (IM) |
+| Autorización de cuentas de Usuario | 850 | 4 (RF) |
+| Escalabilidad: Restablecimiento de contraseña por olvido o bloqueo | 912 | 4 (RF) |
+| Solicitud y asignación de Perfil de Acceso | 852 | 4 (RF) |
+| La solicitud Implica Activación Usuario Contingencia Mesa valida que la solicitud venga con el documento de identidad adjunto por ambos lados. | 926 | 4 (RF) |
+| La solicitud Implica Activación Usuario Contingencia DGA valorar si corresponde | 927 | 4 (RF) |
+| La solicitud Implica Activación Usuario Contingencia DTIC Notifica al solicitante con el usuario y contraseña | 928 | 4 (RF) |
 
-| GLPI | Aranda Sub | Tipo |
-|---:|---:|---|
-| 669 | 898 | Requerimiento |
-| 670 | 899 | Requerimiento |
+### 3.8 Problemas de Anotación de Salida
 
-#### Problemas desarrollador API
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| El sistema no permite registrar la salida efectiva de la mercancía | 854 | 1 (IM) |
+| En segmento Boletín de Liquidación no se genera el link para generar la anotación de salida | 855 | 1 (IM) |
 
-| GLPI | Aranda Sub | Tipo |
-|---:|---:|---|
-| 672 | 925 | Requerimiento |
+### 3.9 Problemas de Asociación de Documentos LPCO
 
-> ⚠️ Aranda 876 (Falla en autenticación o token API) y 877 (Falla en integración) **no tienen equivalente directo en GLPI**.
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| Consultar sobre el tipo de documento LPCO requerido para una operación específica. | 857 | 1 (IM) |
+| Error al intentar adjuntar, vincular o visualizar un documento LPCO. | 858 | 1 (IM) |
+| Escalabilidad: Falla en la conexión de interoperabilidad de ATENA con el organismo emisor del LPCO. (Problemas endpoint) | 859 | 1 (IM) |
+| Se detectan problemas de validación al asociar un LPCO | 862 | 1 (IM) |
+| LPCO aprobado por organismo emisor pero no esta en ATENA | 865 | 1 (IM) |
+| Problemas al solicitar un permiso en el módulo LPCO | 866 | 1 (IM) |
+| Problemas en el módulo LPCO al aprobar un permiso (Usuario: DGT - Estadística y Registro o Aduanas) | 867 | 1 (IM) |
+| Problemas en el módulo LPCO con el registro del permiso por parte del ente emisor. (Ejemplo Ministerio de Seguridad, OFINASE, que no usan ninguna plataforma) | 868 | 1 (IM) |
+| Escalabilidad: Se determina problemas en la digitación del permiso aprobado en el módulo LPCO por parte del ente emisor. (Ejemplo Ministerio de Seguridad, OFINASE) | 863 | 1 (IM) |
+| Escalabilidad: Se detecta que el problema de interoperabilidad esta del lado de las instituciones y no del Consorcio | 860 | 1 (IM) |
+| Permiso solicitado en el módulo LPCO pendiente de aprobación por autoridad Aduanera | 861 | 1 (IM) |
+| Escalabilidad: Se determina que documento de identidad no esta registrado en ATENA | 864 | 1 (IM) |
+| Escalabilidad: Se determina que el problema le corresponde resolverlo a la DTIC | 910 | 1 (IM) |
 
-#### Problemas en Proceso de Tránsito
+### 3.10 Problemas de Pago
 
-| GLPI | Aranda Sub | Tipo |
-|---:|---:|---|
-| 674 | 903 | Requerimiento |
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| Problemas con el envío, respuesta o visualización del pago | 870 | 1 (IM) |
+| Problemas de anulación del DUA | 871 | 1 (IM) |
+| Problemas con la cuenta bancaria | 873 | 1 (IM) |
+| Problemas para registrar la cuenta bancaria de un usuario en ATENA | 874 | 1 (IM) |
+| Escalamiento: Requiere registrar la cuenta bancaria a un usuario | 872 | 1 (IM) |
+| Escalamiento al Banco Central para validación técnica hasta conseguir la solución | 906 | 1 (IM) |
+| Escalamiento al area Técnica del MdH para validar si los servicios de API REST "tesoro digital" (Ej: Web Banking, SINPE) esta operativo | 905 | 1 (IM) |
 
-> ⚠️ Aranda tiene 9 subcategorías de tránsito (889-896), GLPI solo 1. Hay que coordinar.
+### 3.11 Problemas desarrollador API
 
-#### Problemas con el cálculo de la Liquidación
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| Falla en el metódo de autenticación o token API | 876 | 1 (IM) |
+| Falla en la integración o problemas con el API | 877 | 1 (IM) |
+| Consultas sobre documentación del API | 925 | 4 (RF) |
 
-| GLPI | Aranda Sub | Tipo |
-|---:|---:|---|
-| 697 | 836 | Incidencia |
-| 698 | 838 | Incidencia |
-| 699 | 840 | Incidencia |
-| 700 | 837 | Incidencia |
-| 701 | 839 | Incidencia |
+### 3.12 Consulta sobre el Manual de Procedimientos Aduaneros
 
-#### Problemas de Anotación de Salida
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| Consultas sobre el Manual de Procedimientos Aduaneros o Circulares, Directrices y Resoluciones recientes sobre ajustes al procedimiento en ATENA | 898 | 4 (RF) |
+| Escalamiento solo cuando existen consultas sobre el manual de procedimientos aduaneros, LGA - Ley General de Aduanas, RLGA - Reglamento Ley General de Aduanas o novedades sobre Circulares o Directrices (> 1 semana) | 899 | 4 (RF) |
 
-| GLPI | Aranda Sub | Tipo |
-|---:|---:|---|
-| 710 | 854 | Incidencia |
-| 711 | 855 | Incidencia |
+### 3.13 Problemas en el proceso de rectificacion
 
-#### Problemas de Asociación de Documentos LPCO
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| Se están definiendo las politicas de rectificación, después de confirmación | 880 | 1 (IM) |
 
-| GLPI | Aranda Sub | Tipo | Grupo Aranda |
-|---:|---:|---|---:|
-| 713 | 857 | Incidencia | 856 |
-| 714 | 858 | Incidencia | 856 |
-| 715 | 859 | Incidencia | 856 |
-| 716 | 862 | Incidencia | 856 |
-| 717 | 865 | Incidencia | 856 |
-| 718 | 866 | Incidencia | 856 |
-| 719 | 867 | Incidencia | 856 |
-| 720 | 868 | Incidencia | 856 |
-| 721 | 863 | Incidencia | 856 |
-| 722 | 860 | Incidencia | 856 |
-| 723 | 861 | Incidencia | 856 |
-| 724 | 864 | Incidencia | 856 |
-| 725 | 910 | Incidencia | 909 (escal.) |
+### 3.14 Problemas en la Firma Digital
 
-#### Problemas Asociados a la Infraestructura IT (Oculta)
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| Problemas para firmar digitalmente en ATENA | 882 | 1 (IM) |
+| Se detecta que el error es externo, se sensibiliza a contactar a su proveedor de firma digital | 883 | 1 (IM) |
+| Escalamiento al area Técnica del MdH para validar si la plataforma "hacienda autentica" esta operativa | 908 | 1 (IM) |
 
-| GLPI | Aranda Sub | Tipo |
-|---:|---:|---|
-| 685 | 914 | Incidencia |
+### 3.15 Problemas en Proceso de Levante
 
----
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| El sistema no genera la autorización de levante | 885 | 1 (IM) |
+| Escalamiento: Se determina problema de interoperabilidad es de ATENA | 886 | 1 (IM) |
+| Escalamiento: Se determina problema de interoperabilidad es del Puerto | 887 | 1 (IM) |
 
-## 4. Diferencias estructurales relevantes
+### 3.16 Problemas en Proceso de Tránsito
 
-| Dimensión | GLPI | Aranda |
-|---|---|---|
-| Profundidad | 3 niveles (Raíz "MDH" > Grupo > Subcategoría) | 2 niveles (Grupo > Sub Grupo) |
-| Tipo de caso | Implícito en visibilidad (`is_request`, `is_incident`, …) | Explícito por **segmento** (IM=1, RF=4) — la subcategoría se enlaza al segmento |
-| Escalamientos | Modelados como subcategorías del mismo grupo | Modelados como **grupo separado** (911, 909, 904, 907, 913) |
-| Categorías solo Aranda | — | Pago (869/904), Rectificación (879), Firma Digital (881/907), Levante (884) |
-| Categorías solo GLPI | — | (ninguna detectada en este export) |
-| Duplicados | GLPI 682 = 683 (`Problemas al Guardar / Almacenar`) | — |
-
----
-
-## 5. Plan de implementación de `catalogSync`
-
-### 5.1 Esquema de BD propuesto
-
-```sql
--- Migración: 007_catalog_sync.sql
-
-CREATE TABLE IF NOT EXISTS glpi_categories (
-  id              INT UNSIGNED PRIMARY KEY,        -- glpi_itilcategories.id
-  completename    VARCHAR(512) NOT NULL,
-  name            VARCHAR(255) NOT NULL,
-  parent_id       INT UNSIGNED NULL,
-  level           TINYINT UNSIGNED NOT NULL,
-  code            VARCHAR(64) NULL,
-  is_helpdesk     TINYINT(1) NOT NULL DEFAULT 1,
-  is_request      TINYINT(1) NOT NULL DEFAULT 1,
-  is_incident     TINYINT(1) NOT NULL DEFAULT 1,
-  is_problem      TINYINT(1) NOT NULL DEFAULT 1,
-  is_change       TINYINT(1) NOT NULL DEFAULT 1,
-  pulled_at       DATETIME NOT NULL,
-  INDEX idx_parent (parent_id)
-);
-
-CREATE TABLE IF NOT EXISTS aranda_categories (
-  id              INT UNSIGNED PRIMARY KEY,        -- código Aranda (820, 821, …)
-  name            VARCHAR(512) NOT NULL,
-  parent_id       INT UNSIGNED NULL,
-  level           TINYINT UNSIGNED NOT NULL,        -- 1=Grupo, 2=Subgrupo
-  case_type       TINYINT NULL,                     -- 1=IM, 4=RF (solo en hojas)
-  pulled_at       DATETIME NOT NULL,
-  INDEX idx_parent (parent_id)
-);
-
-CREATE TABLE IF NOT EXISTS category_mapping (
-  glpi_id         INT UNSIGNED NOT NULL,
-  aranda_id       INT UNSIGNED NOT NULL,
-  aranda_case_type TINYINT NOT NULL,
-  confidence      ENUM('manual','exact_name','heuristic') NOT NULL DEFAULT 'manual',
-  notes           TEXT NULL,
-  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (glpi_id, aranda_id, aranda_case_type),
-  INDEX idx_glpi (glpi_id),
-  INDEX idx_aranda (aranda_id, aranda_case_type)
-);
-```
-
-### 5.2 Pasos del servicio
-
-1. **`glpiCategoryPull`** — recorrer `/ITILCategory` y volcar a `glpi_categories`.
-2. **`arandaCategoryPull`** — Aranda no expone `/category/list`. Validar si existe en la API del ASDKAPI v8.6; si no, **cargar este `CATALOGO.md` como semilla** vía `scripts/seed-aranda-categories.js`.
-3. **`mappingResolver`** — cruzar por nombre exacto (después de normalizar acentos y espacios) y poblar `category_mapping` con `confidence='exact_name'`. Las filas marcadas como `⚠️` en este documento se insertan como `confidence='manual'` con `notes`.
-4. **Integración en flujos existentes:**
-   - `arandaTicketPush.js`: leer `tickets.itilcategories_id` → `category_mapping` → `CategoryId` + `CaseType`. Si no hay match, usar default actual del `.env`.
-   - `arandaTicketPull.js`: leer `CategoryId` + `CaseType` → `category_mapping` → `itilcategories_id` para insertar en `tickets`.
-
-### 5.3 Pendientes funcionales (bloquean catalogSync)
-
-- [ ] Confirmar si los duplicados GLPI 682 y 683 son intencionales o data sucia.
-- [ ] Decidir tratamiento de **grupos huérfanos en Aranda** (Pago, Rectificación, Firma Digital, Levante): ¿crear en GLPI o mapear a un genérico?
-- [ ] Decidir tratamiento de **subcategorías huérfanas en GLPI** (Tránsito tiene 9 en Aranda, 1 en GLPI; LPCO algunos también).
-- [ ] Confirmar si los **grupos de escalamiento Aranda** (904/907/909/911/913) deben mapearse al grupo base GLPI o crearse como hijos en GLPI.
-- [ ] Aranda 876 y 877 (API): pedir creación equivalente en GLPI o aceptar pérdida en sync.
+| Subcategoría GLPI | Aranda Sub | Segmento |
+|---|---:|---|
+| Problemas al tratar de dar inicio o fin al tránsito, o no actualización del estado de la DUA | 890 | 1 (IM) |
+| Problemas al tratar de modificar datos de tránsito | 891 | 1 (IM) |
+| El sistema no generó el comprobante de movilización | 892 | 1 (IM) |
+| El sistema no muestra la opción de Generar Tránsito (T1) | 893 | 1 (IM) |
+| El sistema no permite realizar la operación de agrupar DUAS para generar un solo Tránsito (T1) | 894 | 1 (IM) |
+| Imposibilidad de imprimir el comprobante de movilización | 895 | 1 (IM) |
+| Problemas para revisar una incidencia en tránsito y actualización de los estados (Usuario: Aduana) | 896 | 1 (IM) |
+| Imposibilidad de reportar incidencias en carretera Ejemplo: ocurrió el incidente y el usuario no sabe que hacer o no se le habilitó la funcionalidad de registrar incidencias | 903 | 4 (RF) |
+| Incidencia pendiente de autorización por parte de la Aduana | 889 | 1 (IM) |
 
 ---
 
-## 6. Histórico del documento
+## 4. Notas de alineación
 
-| Fecha | Cambio |
-|---|---|
-| 2026-06-10 | Captura inicial GLPI (export provisional) + Aranda (export funcional). Mapeo textual derivado. |
-| 2026-06-11 | Sincronización completa GLPI ↔ CSV: los 13 grupos preexistentes movidos bajo MDH (658). Creados 4 grupos nuevos (727 Pago, 728 Rectificación, 729 Firma Digital, 730 Levante) y 25 subs faltantes (ids GLPI 731-755). `service_catalog_sync` pasa de 52 → 77 entradas (cobertura total del catálogo Aranda). El duplicado 682/683 se mantiene sin tocar; el sub 824 cuelga de 682. Escalamientos Aranda 904/907/909/911 aplanados al grupo base GLPI. Script idempotente: `scripts/sync-glpi-from-csv.js`. |
+- **Cobertura:** 77/77 subcategorías GLPI mapeadas a Aranda (100%).
+- **Profundidad:** GLPI es de 3 niveles (MDH > Grupo > Sub); Aranda de 2 (Grupo → Sub). La raíz MDH no tiene equivalente Aranda.
+- **Tipo de caso:** en GLPI es implícito (flags `is_request`/`is_incident`); en Aranda es explícito por segmento (IM=1 / RF=4). El segmento del mapeo proviene de la columna *Tipo* de Aranda.
+- **Escalamientos Aranda:** algunos grupos de escalamiento Aranda (904, 907, 909, 911) se aplanan al grupo base correspondiente en GLPI; sus subs aparecen bajo el grupo padre GLPI.
+- **Regeneración:** ante cualquier cambio en `glpi_categories.csv` o `Libro1.utf8.csv`, correr `node scripts/build-catalog-doc.js` para re-sincronizar este documento, y `node scripts/seed-catalog-local.js` para re-cargar `service_catalog_sync`.
+
+---
+
+_Implementación del sync de catálogo y decisiones funcionales: ver `PLAN_IMPLEMENTACION.md §9`._

@@ -12,9 +12,11 @@ Daemon Node.js que sincroniza **bidireccionalmente** GLPI ↔ Aranda ASDK por po
 ## 1. Requisitos
 
 - Node.js ≥ 20
-- MySQL/MariaDB 10.4+ accesible y con base de datos vacía creada
+- MySQL/MariaDB 10.4+ accesible y con base de datos vacía creada (en prod: RDS externo, ver §4.2)
 - Acceso de red a la API REST de GLPI (`/apirest.php`) y a Aranda ASDKAPI (`/ASDKAPI/api/v8.6`)
 - Credenciales: `APP_TOKEN`, `USER_TOKEN` (GLPI), usuario/clave de Aranda
+- **Catálogo MDH cargado en la instancia GLPI destino** (árbol `MDH > grupo > subcategoría`). El seed del mapeo (`scripts/seed-catalog-local.js`) cruza por nombre, así que requiere que las categorías ya existan en GLPI. Ver [`CATALOGO.md`](CATALOGO.md).
+- **`GLPI_FILTER_USER` correcto** — el nombre del usuario dueño del API token con formato `"nombre (id)"` (ver §8 y `.env.example`).
 
 ---
 
@@ -112,6 +114,9 @@ Verificar conectividad a la base externa antes de continuar:
 nc -vz <DB_HOST> <DB_PORT>          # debe decir "succeeded"
 # opcional, si tienes cliente mysql instalado:
 mysql -h <DB_HOST> -P <DB_PORT> -u <DB_USER> -p -e 'SELECT 1;'
+
+# Ejemplo real de PRODUCCIÓN (RDS externo, puerto NO estándar 5306):
+#   mysql -h atena-tickets-prod-mariadb-incidents.<id>.us-east-1.rds.amazonaws.com -P 5306 -u admin -p
 ```
 
 ### 4.2 Crear la base de datos en el servidor externo
@@ -136,16 +141,20 @@ cd ~                                # /home/<usuario>
 git clone https://github.com/ivuarte/MdH.git
 cd MdH
 cp .env.example .env
-nano .env                           # completar valores reales (DB_HOST apunta al motor externo)
+nano .env                           # completar valores reales (DB_HOST/PORT al RDS externo, GLPI_FILTER_USER con formato "nombre (id)")
 npm ci --omit=dev
 npm run migrate                     # corre migrations/*.sql contra la BD externa
+node scripts/seed-catalog-local.js  # carga el mapeo de categorías en service_catalog_sync
 ```
+
+> **Catálogo (paso obligatorio):** `seed-catalog-local.js` cruza por NOMBRE las categorías de la instancia GLPI destino con `Libro1.utf8.csv` (Aranda) y puebla `service_catalog_sync`. Es **agnóstico de IDs** (funciona en local, preprod y prod sin tocar nada) e **idempotente**. Reporta `matched`/`unmatched`; debe dar 77/77. Si da `unmatched`, falta cargar esas categorías en GLPI. **No usar** `sync-glpi-from-csv.js` en prod: está cableado a los IDs de la instancia vieja (658…) y reorganiza el árbol GLPI. Verificar alineación con `node scripts/analyze-catalog-alignment.js`.
 
 Probar manualmente que arranca:
 
 ```bash
 npm start
-# Ctrl+C cuando confirmes los logs de los servicios
+# Ctrl+C cuando confirmes los logs de los servicios:
+#   "DB conectada", "GLPI sesión iniciada", "Aranda sesión iniciada", y los servicios "Iniciando (poll=...)"
 ```
 
 ### 4.4 Instalar como servicio systemd
@@ -195,6 +204,7 @@ git pull --ff-only origin main
 npm ci --omit=dev                   # solo si cambió package-lock.json
 # (las migraciones se aplican solas si RUN_MIGRATIONS_ON_START=true)
 # si lo desactivaste: npm run migrate
+node scripts/seed-catalog-local.js  # solo si cambió el catálogo (Libro1.utf8.csv o categorías GLPI)
 sudo systemctl restart mdh
 sudo journalctl -u mdh -n 100 -f
 ```
@@ -262,6 +272,24 @@ Secrets a configurar en `Settings → Secrets and variables → Actions`:
 > ```
 > <usuario> ALL=(root) NOPASSWD: /bin/systemctl restart mdh, /bin/systemctl status mdh
 > ```
+
+### 4.8 Checklist de puesta en producción
+
+Validar en orden antes de habilitar el servicio:
+
+- [ ] **DB externa alcanzable**: `nc -vz <DB_HOST> <DB_PORT>` → `succeeded` (prod: puerto **5306**).
+- [ ] **Base `mdh` creada** y usuario con privilegios (§4.2).
+- [ ] **`.env` completo**: GLPI/Aranda URLs + tokens; `DB_*` al RDS; `NODE_ENV=production`.
+- [ ] **`GLPI_FILTER_USER` con formato `"nombre (id)"`** del usuario dueño del API token (confírmalo en una entrada de `/Log`). ⚠️ Si está mal, no entra ningún ticket.
+- [ ] **`npm run migrate`** sin errores (13 migraciones, hasta `013_inbound_files_source.sql`).
+- [ ] **Catálogo cargado en GLPI** (árbol `MDH`) y **`node scripts/seed-catalog-local.js`** reporta **77/77 matched, 0 unmatched**.
+- [ ] **`node scripts/analyze-catalog-alignment.js`** → 16 grupos / 77 subs alineados sin huérfanos.
+- [ ] **Preflight OK** en `npm start`: `DB conectada` + `GLPI sesión iniciada` + `Aranda sesión iniciada`.
+- [ ] **(Recomendado) primer arranque acotado** a lectura: `SERVICES_ENABLED=glpiTicketSync,glpiFollowupSync,glpiSolutionSync,glpiTaskSync`, validar ingesta, luego habilitar todo.
+- [ ] **systemd** habilitado (`systemctl enable --now mdh`) y `journalctl -u mdh -f` sin errores recurrentes.
+- [ ] **GLPI 11**: si la instancia destino es 11.x, ejecutar antes el protocolo de §7 (probe de `/Log`).
+
+> Lo único que cambia entre preprod y prod es el bloque `DB_*` del `.env` (host RDS + puerto 5306 + credenciales). El código, las migraciones y el catálogo son idénticos.
 
 ---
 
@@ -368,6 +396,9 @@ Antes de cambiar `GLPI_BASE_URL` en `.env` a la instancia 11.0.7:
 
 - **Faltan variables requeridas: …** → completar `.env` y reiniciar.
 - **`POLL_INTERVAL muy bajo`** → mínimo 5 segundos.
+- **El daemon arranca pero NO entra ningún ticket nuevo de GLPI** → casi siempre es `GLPI_FILTER_USER` mal puesto. `glpiTicketSync` filtra `/Log` por `user_name` y GLPI lo entrega como `"nombre (id)"` (p.ej. `glpi (2)`). Si pusiste solo `glpi`, descarta todo. Revisa una entrada de `/Log` y copia el valor exacto.
+- **Un ticket GLPI llega a Aranda con la categoría por defecto (722)** → el catálogo no está sembrado o esa categoría quedó `unmatched`. Correr `node scripts/seed-catalog-local.js` (debe dar 77/77) y `analyze-catalog-alignment.js`.
+- **El estado de Aranda no avanza (queda "Registrado") aunque GLPI esté "Asignado"** → `statusSync` ya verifica-después-de-escribir y reintenta; si persiste, revisar `aranda_status_sync.last_error` para ese ticket.
 - **El daemon arranca pero ningún servicio sincroniza** → revisar `SERVICES_ENABLED` y el flag por servicio.
 - **GLPI 400 `ERROR_GLPI_ADD`** al postear solución → el ticket ya está resuelto/cerrado; `arandaSolutionPull` cae a Followup automáticamente.
 - **Aranda devuelve 401** → el token de sesión rotó; el `arandaClient` re-loguea solo, basta esperar el siguiente tick.
