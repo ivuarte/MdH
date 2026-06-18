@@ -299,10 +299,76 @@ SERVICES_ENABLED=arandaTicketPull,glpiTicketSync,arandaSolutionPull
 
 ---
 
-## 7. Troubleshooting
+## 7. Compatibilidad con GLPI 11 (importante antes del switch a prod)
+
+El daemon se desarrolló y validó contra una instancia GLPI 10 (`glpi.iammtechs.com`). El destino de producción declara `GLPI 11.0.7 Copyright (C) 2015-2026 Teclib' and contributors`. La API legacy `/apirest.php` **sigue soportada** en GLPI 11 (no hay deprecación inmediata), pero hay **un cambio confirmado por la doc oficial** que afecta al daemon:
+
+### 7.1 Riesgo principal — endpoint `/Log` top-level
+
+| Endpoint | GLPI 10 | GLPI 11 (doc actual) |
+|---|---|---|
+| `GET /Log?order=DESC&range=…` (log global) | Documentado y usado | **No aparece como top-level** en la doc oficial actual |
+| `GET /{itemtype}/{id}/Log` (sub-resource) | Existe | Existe |
+| `GET /search/Log/…` (búsqueda) | Existe | Existe — la alternativa documentada para descubrimiento global |
+
+Servicios del daemon que dependen de `/Log` top-level:
+
+| Servicio | Uso de `/Log` | Severidad si rompe |
+|---|---|---|
+| `glpiTicketSync` | Cursor principal `glpi_log_max_id` para descubrir tickets nuevos | 🔴 Alta — sin él no entran tickets nuevos al sistema |
+| `glpiFollowupSync` | Cursor + polling directo de followups por ticket | 🟡 Media — el polling directo cubre el caso |
+| `glpiSolutionSync` | Cursor + polling directo de soluciones | 🟡 Media — el polling directo cubre el caso |
+
+**Plan de mitigación si `/Log` top-level no responde en GLPI 11.0.7**:
+- `glpiTicketSync` pasa a usar `GET /search/Ticket?sort=19&order=DESC` (sort por `date_mod`) o `GET /search/Log` con criterios — ajuste acotado a ese servicio.
+- Los demás servicios siguen funcionando porque ya hacen polling directo por ticket.
+
+### 7.2 Endpoints sin cambios documentados (verdes)
+
+Confirmados en la doc oficial del branch `main` de GLPI:
+
+- `GET /initSession` (con `app_token` + `user_token` como query o headers) ✓
+- CRUD de cualquier itemtype con `{ input: {...} }` ✓
+- `GET /{itemtype}/{id}/{sub_itemtype}` (Document_Item, ITILFollowup, ITILSolution, TicketTask) ✓
+- `GET /Document/{id}` (metadata) ✓
+- `GET /Document/{id}?alt=media` (binario) ✓
+- `POST /Document/` multipart con `uploadManifest` + `filename[0]` ✓
+
+### 7.3 Aranda — no se ve afectado
+
+GLPI 11 no impacta absolutamente nada del lado Aranda. Sigue siendo ASDKAPI v8.6 (misma instancia, mismas convenciones array Field/Value, mismo `/item/addfile`).
+
+### 7.4 Protocolo de validación previa al switch
+
+Antes de cambiar `GLPI_BASE_URL` en `.env` a la instancia 11.0.7:
+
+1. **Apuntar la colección Postman** ([`postman/mdh-endpoints.postman_collection.json`](postman/mdh-endpoints.postman_collection.json)) a la nueva URL editando la variable `GLPI_BASE_URL`. Ejecutar la carpeta entera `GLPI / …`. Todos los requests deben devolver 200 (o 201 en POST).
+
+2. **Correr el probe de compatibilidad** desde el servidor del daemon contra la instancia destino:
+   ```bash
+   GLPI_BASE_URL=https://<glpi11-host>/apirest.php \
+   APP_TOKEN=<token> USER_TOKEN=<token> \
+   TICKET_ID=<un-ticket-existente> \
+   GLPI_DOCUMENT_ID=<un-doc-existente> \
+   node scripts/probe-glpi11-compat.js
+   ```
+   El script imprime una tabla `endpoint / status / OK|FAIL` con foco especial en `/Log` top-level vs `/search/Log` vs `/search/Ticket`. Si todo da OK, el daemon puede apuntarse sin tocar código.
+
+3. **Si `/Log` top-level da 404** (lo más probable en GLPI 11):
+   - El probe ya validó si `/search/Log` y `/search/Ticket?sort=date_mod` funcionan.
+   - Adaptar `glpiTicketSync` para usar el endpoint disponible (cambio acotado, ~30 líneas).
+
+4. **Switch en producción**: editar `.env` con el nuevo `GLPI_BASE_URL` + tokens, `sudo systemctl restart mdh`, monitorear `journalctl -u mdh -f` por unos minutos. Si `/Log` global no funciona y no se hizo el fix previo, verás errores `glpiTicketSync getLog status=404` repetidos cada `POLL_INTERVAL`.
+
+> Recomendación: hacer el switch con `SERVICES_ENABLED=glpiTicketSync,glpiFollowupSync,glpiSolutionSync,glpiTaskSync` primero (solo lectura GLPI → DB), validar que los datos siguen entrando, y después habilitar el resto.
+
+---
+
+## 8. Troubleshooting
 
 - **Faltan variables requeridas: …** → completar `.env` y reiniciar.
 - **`POLL_INTERVAL muy bajo`** → mínimo 5 segundos.
 - **El daemon arranca pero ningún servicio sincroniza** → revisar `SERVICES_ENABLED` y el flag por servicio.
 - **GLPI 400 `ERROR_GLPI_ADD`** al postear solución → el ticket ya está resuelto/cerrado; `arandaSolutionPull` cae a Followup automáticamente.
 - **Aranda devuelve 401** → el token de sesión rotó; el `arandaClient` re-loguea solo, basta esperar el siguiente tick.
+- **GLPI `/Log` devuelve 404 en producción** → estás contra GLPI 11; ver §7 para la adaptación.
