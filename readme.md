@@ -280,6 +280,7 @@ Secrets a configurar en `Settings → Secrets and variables → Actions`:
 Validar en orden antes de habilitar el servicio:
 
 - [ ] **DB externa alcanzable**: `nc -vz <DB_HOST> <DB_PORT>` → `succeeded` (prod: puerto **5306**).
+- [ ] **TLS a la BD**: si la RDS tiene `require_secure_transport=ON` (error `ER_SECURE_TRANSPORT_REQUIRED`), poner **`DB_SSL=true`** en `.env` (opcional `DB_SSL_CA` para verificar el cert).
 - [ ] **Base `mdh` creada** y usuario con privilegios (§4.2).
 - [ ] **`.env` completo**: GLPI/Aranda URLs + tokens; `DB_*` al RDS; `NODE_ENV=production`.
 - [ ] **`GLPI_FILTER_USER` con formato `"nombre (id)"`** del usuario dueño del API token (confírmalo en una entrada de `/Log`). ⚠️ Si está mal, no entra ningún ticket.

@@ -1,9 +1,23 @@
+import fs from 'node:fs';
 import mysql from 'mysql2/promise';
 import { logger } from './logger.js';
 
 let pool = null;
 
+// Construye la opción `ssl` para mysql2 según config. Requerido en RDS con
+// require_secure_transport=ON. Si DB_SSL no está activo, devuelve undefined (sin TLS).
+function buildSslOption(cfg) {
+  if (!cfg.DB_SSL) return undefined;
+  const ssl = { rejectUnauthorized: !!cfg.DB_SSL_REJECT_UNAUTHORIZED, minVersion: 'TLSv1.2' };
+  if (cfg.DB_SSL_CA) {
+    ssl.ca = fs.readFileSync(cfg.DB_SSL_CA);       // verifica el cert del servidor con esta CA
+    ssl.rejectUnauthorized = true;
+  }
+  return ssl;
+}
+
 export async function initDB(cfg) {
+  const ssl = buildSslOption(cfg);
   pool = mysql.createPool({
     host: cfg.DB_HOST,
     port: cfg.DB_PORT,
@@ -16,10 +30,11 @@ export async function initDB(cfg) {
     keepAliveInitialDelay: 10000,
     timezone: 'Z',
     dateStrings: false,
-    multipleStatements: false
+    multipleStatements: false,
+    ...(ssl ? { ssl } : {})
   });
   await pool.query('SELECT 1');
-  logger.info('DB conectada', { service: 'db', db: cfg.DB_NAME, host: cfg.DB_HOST });
+  logger.info('DB conectada', { service: 'db', db: cfg.DB_NAME, host: cfg.DB_HOST, ssl: !!ssl });
   return pool;
 }
 

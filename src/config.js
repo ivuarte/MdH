@@ -40,6 +40,13 @@ export const config = {
   DB_PASS: asStr(process.env.DB_PASS, 'root'),
   DB_NAME: asStr(process.env.DB_NAME, 'mdh'),
   DB_POOL_LIMIT: asInt(process.env.DB_POOL_LIMIT, 10),
+  // TLS hacia la BD. Requerido en RDS con require_secure_transport=ON.
+  //  DB_SSL=true                       → activa TLS.
+  //  DB_SSL_CA=/ruta/rds-ca-bundle.pem → verifica el cert con esa CA (recomendado en prod).
+  //  DB_SSL_REJECT_UNAUTHORIZED=true    → exige cert válido (default false: cifra sin verificar CA).
+  DB_SSL: asBool(process.env.DB_SSL, false),
+  DB_SSL_CA: asStr(process.env.DB_SSL_CA, null),
+  DB_SSL_REJECT_UNAUTHORIZED: asBool(process.env.DB_SSL_REJECT_UNAUTHORIZED, false),
 
   // Sincronización
   POLL_INTERVAL: asInt(process.env.POLL_INTERVAL, 20),
