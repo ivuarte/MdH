@@ -199,9 +199,10 @@ export class ArandaTicketPullService extends BaseService {
   async createGlpiTicket(row) {
     const subj = normalizeHtml(row.subject || '(sin asunto)', 250);
     const desc = normalizeHtml(row.description || '', 50000);
-    const code = row.composed_item_id ? ` ${row.composed_item_id}` : '';
-    const marker = `${FROM_ARANDA_TAG}${code}`;
-    const fullContent = `${marker}\n\n${desc}`;
+    // El código Aranda (ComposedId) ya NO va en el contenido: se fija en el campo nativo
+    // `externalid` del ticket (abajo). Mantenemos el marcador [from aranda] (sin id) como
+    // pista humana de origen; el anti-bucle real es origin='ARANDA'.
+    const fullContent = `${FROM_ARANDA_TAG}\n\n${desc}`;
 
     const type = glpiTypeFromArandaSegment(row.aranda_segment);
     const status = initialGlpiStatusFromAranda(row.aranda_state_id);
@@ -220,6 +221,8 @@ export class ArandaTicketPullService extends BaseService {
       type,
       status
     };
+    // External ID = código Aranda (ComposedId), p.ej. "IM-370723-1-183378".
+    if (row.composed_item_id) input.externalid = row.composed_item_id;
     if (urgency != null) input.urgency = urgency;
     if (priority != null) input.priority = priority;
     if (itilcategoryId != null) input.itilcategories_id = itilcategoryId;

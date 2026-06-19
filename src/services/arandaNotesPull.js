@@ -103,7 +103,8 @@ export class ArandaNotesPullService extends BaseService {
     const [items] = await getDB().query(
       `SELECT a.aranda_item_id, a.ticket_id, t.type AS glpi_type
          FROM aranda_items a JOIN tickets t ON t.id=a.ticket_id
-        WHERE a.status='synced' AND a.aranda_item_id IS NOT NULL`
+        WHERE a.status='synced' AND a.aranda_item_id IS NOT NULL
+          AND a.origin = 'GLPI'`
     );
     let ignored = 0, kept = 0;
     for (const it of items) {
@@ -162,6 +163,7 @@ export class ArandaNotesPullService extends BaseService {
          JOIN tickets t ON t.id = a.ticket_id
         WHERE a.aranda_item_id IS NOT NULL
           AND a.status = 'synced'
+          AND a.origin = 'GLPI'
         ORDER BY a.updated_at DESC
         LIMIT 200`
     );

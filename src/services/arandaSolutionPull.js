@@ -115,6 +115,7 @@ export class ArandaSolutionPullService extends BaseService {
          LEFT JOIN aranda_solution_pulls asp ON asp.aranda_item_id = ai.aranda_item_id
         WHERE ass.last_aranda_stateid = ?
           AND ai.status = 'synced'
+          AND ai.origin = 'GLPI'
           AND (asp.aranda_item_id IS NULL
                OR (asp.status = 'failed' AND asp.tries < ?))
         ORDER BY ai.ticket_id ASC

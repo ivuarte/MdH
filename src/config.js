@@ -74,6 +74,13 @@ export const config = {
   ARANDA_PULL_PAGE_SIZE: asInt(process.env.ARANDA_PULL_PAGE_SIZE, 50),
   INBOUND_GLPI_REQUESTER_ID: asInt(process.env.INBOUND_GLPI_REQUESTER_ID, null),
 
+  // Política GLPI-master: los casos se crean SOLO en GLPI. Un caso creado en Aranda
+  // NO debe crear un ticket en GLPI. Por eso arandaTicketPull (creación inversa) queda
+  // DESHABILITADO por defecto. Las actualizaciones Aranda→GLPI (notas, estados, soluciones,
+  // adjuntos) de casos originados en GLPI siguen funcionando: operan sobre aranda_items.
+  // Poner en true SOLO si se quisiera reactivar la creación de tickets desde Aranda.
+  ARANDA_TICKET_PULL_ENABLED: asBool(process.env.ARANDA_TICKET_PULL_ENABLED, false),
+
   // Anti-eco
   ANTI_ECHO_WINDOW_SECONDS: asInt(process.env.ANTI_ECHO_WINDOW_SECONDS, 60),
 

@@ -51,6 +51,7 @@ export class PrioritySyncService extends BaseService {
          JOIN aranda_items ai ON ai.ticket_id = t.id
          LEFT JOIN aranda_priority_sync aps ON aps.ticket_id = t.id
         WHERE ai.status = 'synced'
+          AND ai.origin = 'GLPI'
           AND (t.status IS NULL OR t.status NOT IN (5,6))
           AND (t.urgency IS NOT NULL OR t.priority IS NOT NULL)
           AND (aps.ticket_id IS NULL
@@ -176,7 +177,7 @@ export class PrioritySyncService extends BaseService {
         if (!Number.isFinite(arandaItemId)) continue;
 
         const [[mapRow]] = await getDB().query(
-          `SELECT ticket_id FROM aranda_items WHERE aranda_item_id = ? LIMIT 1`,
+          `SELECT ticket_id FROM aranda_items WHERE aranda_item_id = ? AND origin = 'GLPI' LIMIT 1`,
           [arandaItemId]
         );
         if (!mapRow) continue;

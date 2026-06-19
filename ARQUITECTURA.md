@@ -39,7 +39,7 @@ Implementación versión producción (v2.0.0): 18 servicios polleres, anti-bucle
        │    aranda_inbound_tasks                                            │
        │  Trazabilidad / anti-eco:                                          │
        │    sync_events · sync_cursors                                      │
-       │  Fase 2:                                                           │
+       │  Catálogo de categorías (77 mapeos GLPI↔Aranda):                   │
        │    service_catalog_sync                                            │
        │  Versionado:                                                       │
        │    _schema_version                                                 │
@@ -83,7 +83,7 @@ MdH_v2/
 │       ├── glpiSolutionSync.js           # [3]  Soluciones GLPI → ticket_solutions
 │       ├── glpiTaskSync.js               # [4]  TicketTask GLPI → ticket_tasks (polling directo)
 │       ├── arandaTicketPush.js           # [5]  tickets(origin=GLPI) sin mapping → /item/add
-│       ├── arandaBacklinkToGlpi.js       # [6]  aranda_items sin backlink → ITILFollowup en GLPI
+│       ├── arandaBacklinkToGlpi.js       # [6]  aranda_items sin backlink → fija externalid (ComposedId) en el ticket GLPI
 │       ├── arandaNotesPush.js            # [7]  ticket_followups → notas Aranda
 │       ├── arandaTasksPush.js            # [8]  ticket_tasks → notas Aranda con [Tarea GLPI]
 │       ├── arandaSolutionPush.js         # [9]  ticket_solutions(GLPI) → Commentary Aranda
@@ -141,16 +141,21 @@ MdH_v2/
 | # | Servicio | Lee de MySQL | Escribe en Aranda | Tabla destino |
 |---|----------|--------------|-------------------|---------------|
 | 5 | `arandaTicketPush` | `tickets` sin mapping o `status='failed'` | `POST /item/add/{segment}` | `aranda_items` |
-| 6 | `arandaBacklinkToGlpi` | `aranda_items` con `glpi_backlinked_at IS NULL` | `POST /ITILFollowup` en GLPI con `[from aranda] caso REQ-xxxx` | `aranda_items.glpi_backlinked_at` |
+| 6 | `arandaBacklinkToGlpi` | `aranda_items` con `glpi_backlinked_at IS NULL` | `PUT /Ticket` fijando `externalid` = ComposedId Aranda (NO followup) | `aranda_items.glpi_backlinked_at` |
 | 7 | `arandaNotesPush` | `ticket_followups origin=GLPI` no enviados | `POST /item/{id}/{seg}/note` | `aranda_followup_notes` |
 | 8 | `arandaTasksPush` | `ticket_tasks origin=GLPI` no enviados | `POST /item/{id}/{seg}/note` con prefijo `[Tarea GLPI]` | `aranda_task_notes` |
-| 9 | `arandaSolutionPush` | `ticket_solutions origin=GLPI` no enviados | `POST /item/update/{id}/{seg}/{userId}` con `Commentary` | `aranda_solution_updates` |
+| 9 | `arandaSolutionPush` | `ticket_solutions origin=GLPI` no enviados, con ticket `status IN (5,6)` | `POST /item/update` con **StateId=21 (Resuelto) + ReasonId=10 + Commentary=solución** → cae en el apartado "Solución" de Aranda (no hay campo dedicado) | `aranda_solution_updates` |
 
-### Pull Aranda → MySQL → GLPI (3) — los flujos nuevos vs MVP
+### Pull Aranda → MySQL → GLPI
+
+> **Política GLPI-master:** la sincronización ocurre **solo** para casos creados en GLPI
+> (`aranda_items.origin='GLPI'`). Un caso creado en Aranda no se crea en GLPI ni se sincroniza.
+> Por eso `arandaTicketPull` está **deshabilitado por defecto** y los pull de actualización
+> (11, 11b, estados, prioridad, adjuntos) filtran `origin='GLPI'`.
 
 | # | Servicio | Lee de Aranda | Escribe en GLPI | Tabla destino |
 |---|----------|---------------|-----------------|---------------|
-| 10 | `arandaTicketPull` | `POST /item/list` (filtrado por author ≠ bot y no en `aranda_items`) | `POST /Ticket` (origin=ARANDA), backlink al composedId | `aranda_inbound_items`, `tickets`, `aranda_items` |
+| 10 | `arandaTicketPull` ⛔ **deshabilitado** (`ARANDA_TICKET_PULL_ENABLED=false`) | `POST /item/list` (filtrado por author ≠ bot y no en `aranda_items`) | `POST /Ticket` (origin=ARANDA) con `externalid` = ComposedId Aranda | `aranda_inbound_items`, `tickets`, `aranda_items` |
 | 11 | `arandaNotesPull` | `GET /item/{id}/{seg}/note/list` por cada item mapeado | `addFollowup` (ActionType=16 NOTA) o `addTicketTask` (ActionType=22 TAREA) | `aranda_inbound_notes`, `aranda_inbound_tasks`, `ticket_followups`, `ticket_tasks` |
 | 11b | `arandaSolutionPull` | `note/list` filtrado a transición `[STATUS]→Resuelto` + `[COMMENTARY]` del mismo timestamp (autor ≠ bot) | `POST /ITILSolution` si GLPI < 5; si ≥ 5 cae a `POST /ITILFollowup` con prefijo `[Solución Aranda]` | `aranda_solution_pulls`, `ticket_solutions` (origin=ARANDA, `solution_id = -aranda_item_id`) |
 
@@ -174,7 +179,7 @@ PUSH y PULL en ambos servicios se ejecutan en `Promise.all` en cada tick. Anti-e
 
 | # | Servicio | Dirección | Lógica |
 |---|----------|-----------|--------|
-| 14 | `catalogSync` | Stub de mantenimiento | Verificación liviana del schema. El mapeo real (77 entradas) se cargó en `service_catalog_sync` vía `scripts/sync-glpi-from-csv.js`. `arandaTicketPush` y `arandaTicketPull` consultan esta tabla con JOIN para traducir `glpi_itilcategories_id` ↔ (`aranda_category_id`, `aranda_segment`). |
+| 14 | `catalogSync` | Monitoreo del catálogo (no carga datos) | Reporta al arrancar cuántos mapeos hay en `service_catalog_sync` y avisa si está vacía. El catálogo (77 mapeos) **ya está implementado**: se carga con `scripts/seed-catalog-local.js` y lo consumen `arandaTicketPush`/`arandaTicketPull` por JOIN para traducir `glpi_itilcategories_id` ↔ (`aranda_category_id`, `aranda_segment`). |
 
 ### Adjuntos (3)
 
@@ -553,7 +558,7 @@ POST Aranda /item/add/4 → {itemId: 368801, composedItemId: "RF-368801-1-168151
 MySQL: INSERT aranda_items (42558, 368801, "RF-368801-...", origin='GLPI', status='synced')
     │
     ▼  arandaBacklinkToGlpi
-GLPI POST /ITILFollowup {content: "[from aranda] caso RF-368801-1-168151", items_id: 42558}
+GLPI PUT /Ticket {id: 42558, externalid: "RF-368801-1-168151"}
 MySQL: UPDATE aranda_items SET glpi_backlinked_at = NOW()
     │
     ▼  flujos continuos (en paralelo)
@@ -566,19 +571,22 @@ arandaSolutionPush   → ticket_solutions    → POST /item/update con Commentar
 statusSync (PUSH)    → cambios estado GLPI → POST /item/update con StateId+ReasonId+Commentary
 ```
 
-### Caso: Aranda origina
+### Caso: Aranda origina  ⛔ DESHABILITADO (política GLPI-master)
+
+> Por política, un caso creado en Aranda **NO** se crea en GLPI ni se sincroniza.
+> El flujo de abajo solo aplica si se reactiva `ARANDA_TICKET_PULL_ENABLED=true` (no recomendado).
 
 ```
 Usuario crea caso RF-369999 en Aranda (AuthorId ≠ ARANDA_AUTHOR_ID)
     │
-    ▼  arandaTicketPull
+    ▼  arandaTicketPull  (deshabilitado por defecto)
 POST /item/list con filtro AuthorId != bot
 Detecta item 370000 no presente en aranda_items
-POST GLPI /Ticket → ticket #42999
+POST GLPI /Ticket (externalid="IM-370000-1-xxxxx") → ticket #42999
 MySQL: INSERT aranda_inbound_items (370000, status=synced, glpi_ticket_id=42999)
        INSERT tickets (42999, origin='ARANDA', ...)
        INSERT aranda_items (42999, 370000, origin='ARANDA', status='synced')
-       → backlink en GLPI con [from aranda]
+       → externalid del ticket GLPI = ComposedId Aranda (marcador [from aranda] sin id en el cuerpo)
     │
     ▼  flujos continuos
 arandaNotesPull

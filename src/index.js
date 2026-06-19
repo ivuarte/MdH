@@ -95,8 +95,16 @@ async function main() {
     manager.register(new ArandaTasksPushService({ POLL_INTERVAL: config.POLL_INTERVAL }));
     manager.register(new ArandaSolutionPushService({ POLL_INTERVAL: config.POLL_INTERVAL }));
 
-    // Aranda → GLPI (NUEVO)
-    manager.register(new ArandaTicketPullService({ POLL_INTERVAL: config.POLL_INTERVAL }));
+    // Aranda → GLPI
+    // Política GLPI-master: los casos creados en Aranda NO se crean en GLPI.
+    // arandaTicketPull (creación inversa de tickets) está deshabilitado por defecto.
+    if (config.ARANDA_TICKET_PULL_ENABLED) {
+      manager.register(new ArandaTicketPullService({ POLL_INTERVAL: config.POLL_INTERVAL }));
+    } else {
+      logger.info('arandaTicketPull DESHABILITADO — política GLPI-master: los casos creados en Aranda no se crean en GLPI (solo se sincronizan los originados en GLPI)', { service: 'manager' });
+    }
+    // Estos pull SÍ siguen activos: actualizan en GLPI los casos ORIGINADOS EN GLPI
+    // (operan sobre aranda_items; un caso Aranda nunca llega aquí porque no se crea su mapping).
     manager.register(new ArandaNotesPullService({ POLL_INTERVAL: config.POLL_INTERVAL }));
     manager.register(new ArandaSolutionPullService({ POLL_INTERVAL: config.POLL_INTERVAL }));
 

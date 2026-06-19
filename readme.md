@@ -2,6 +2,8 @@
 
 Daemon Node.js que sincroniza **bidireccionalmente** GLPI ↔ Aranda ASDK por polling, usando MySQL como capa de persistencia, deduplicación y trazabilidad.
 
+> **Política GLPI-master:** los casos se crean **solo en GLPI**. Todo caso creado en GLPI se replica en Aranda y a partir de ahí se actualiza en **ambos sentidos** (estados, notas, tareas, soluciones, adjuntos). Un caso creado **en Aranda NO se crea en GLPI** ni se sincroniza. Implementado vía `ARANDA_TICKET_PULL_ENABLED=false` (default) + filtro `aranda_items.origin='GLPI'` en todos los servicios de sync.
+
 - Arquitectura completa: [`ARQUITECTURA.md`](ARQUITECTURA.md)
 - Catálogo de categorías: [`CATALOGO.md`](CATALOGO.md)
 - Plan e historial de decisiones: [`PLAN_IMPLEMENTACION.md`](PLAN_IMPLEMENTACION.md)
@@ -399,6 +401,7 @@ Antes de cambiar `GLPI_BASE_URL` en `.env` a la instancia 11.0.7:
 - **El daemon arranca pero NO entra ningún ticket nuevo de GLPI** → casi siempre es `GLPI_FILTER_USER` mal puesto. `glpiTicketSync` filtra `/Log` por `user_name` y GLPI lo entrega como `"nombre (id)"` (p.ej. `glpi (2)`). Si pusiste solo `glpi`, descarta todo. Revisa una entrada de `/Log` y copia el valor exacto.
 - **Un ticket GLPI llega a Aranda con la categoría por defecto (722)** → el catálogo no está sembrado o esa categoría quedó `unmatched`. Correr `node scripts/seed-catalog-local.js` (debe dar 77/77) y `analyze-catalog-alignment.js`.
 - **El estado de Aranda no avanza (queda "Registrado") aunque GLPI esté "Asignado"** → `statusSync` ya verifica-después-de-escribir y reintenta; si persiste, revisar `aranda_status_sync.last_error` para ese ticket.
+- **Un caso creado en Aranda no aparece en GLPI** → es el **comportamiento esperado** (política GLPI-master). Solo los casos creados en GLPI se sincronizan. Para reactivar la creación inversa (no recomendado): `ARANDA_TICKET_PULL_ENABLED=true`.
 - **El daemon arranca pero ningún servicio sincroniza** → revisar `SERVICES_ENABLED` y el flag por servicio.
 - **GLPI 400 `ERROR_GLPI_ADD`** al postear solución → el ticket ya está resuelto/cerrado; `arandaSolutionPull` cae a Followup automáticamente.
 - **Aranda devuelve 401** → el token de sesión rotó; el `arandaClient` re-loguea solo, basta esperar el siguiente tick.

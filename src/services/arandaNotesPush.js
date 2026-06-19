@@ -30,6 +30,7 @@ export class ArandaNotesPushService extends BaseService {
        LEFT JOIN aranda_followup_notes an ON an.followup_id = f.followup_id
        WHERE (an.followup_id IS NULL OR (an.status = 'failed' AND an.tries < 5))
          AND f.origin = 'GLPI'
+         AND ai.origin = 'GLPI'
        ORDER BY f.followup_id ASC
        LIMIT 100`
     );

@@ -9,7 +9,11 @@ function arandaSegmentFromGlpiType(type) {
   return Number(type) === 2 ? 4 : 1;
 }
 
-// Propaga ticket_solutions origin=GLPI a Aranda usando /item/update con Commentary.
+// Propaga ticket_solutions origin=GLPI a Aranda RESOLVIENDO el caso: /item/update con
+// StateId=21 (Resuelto) + ReasonId=10 + Commentary=texto de la solución. Aranda ASDK no
+// tiene campo de "solución" dedicado (confirmado en la doc oficial v8); el apartado "Solución"
+// se alimenta del Commentary de la transición a Resuelto. Por eso NO se manda Commentary suelto
+// (eso aparecía como nota común).
 export class ArandaSolutionPushService extends BaseService {
   constructor(opts = {}) {
     super('arandaSolutionPush', opts);
@@ -30,6 +34,8 @@ export class ArandaSolutionPushService extends BaseService {
        LEFT JOIN aranda_solution_updates asu ON asu.solution_id = s.solution_id
        WHERE (asu.solution_id IS NULL OR (asu.status = 'failed' AND asu.tries < 5))
          AND s.origin = 'GLPI'
+         AND ai.origin = 'GLPI'
+         AND t.status IN (5, 6)
        ORDER BY s.solution_id ASC
        LIMIT 100`
     );
@@ -42,7 +48,13 @@ export class ArandaSolutionPushService extends BaseService {
 
       try {
         const segment = arandaSegmentFromGlpiType(glpi_type);
-        const fields = [{ Field: 'Commentary', Value: content || '' }];
+        // StateId=21 (Resuelto) + ReasonId=10 ("Especialista resuelve el caso") → el Commentary
+        // queda como la SOLUCIÓN del caso en Aranda. Rol Atena_GLPI sí puede setear 21 (no 11/29).
+        const fields = [
+          { Field: 'StateId',    Value: 21 },
+          { Field: 'ReasonId',   Value: 10 },
+          { Field: 'Commentary', Value: content || '' }
+        ];
         let obj;
         try {
           obj = await arandaClient.updateItem(aranda_item_id, segment, config.ARANDA_AUTHOR_ID, fields);

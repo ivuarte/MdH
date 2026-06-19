@@ -108,6 +108,7 @@ export class StatusSyncService extends BaseService {
          LEFT JOIN aranda_status_sync ass ON ass.ticket_id = t.id
         WHERE t.status IN (2,3,4,5,6)
           AND ai.status = 'synced'
+          AND ai.origin = 'GLPI'
           AND (ass.ticket_id IS NULL OR ass.last_glpi_status IS NULL OR ass.last_glpi_status <> t.status)
         ORDER BY t.id ASC
         LIMIT 100`
@@ -118,6 +119,18 @@ export class StatusSyncService extends BaseService {
       const { ticket_id, glpi_status, glpi_type, aranda_item_id } = row;
       const mapped = mapGlpiToAranda(glpi_status, glpi_type);
       if (!mapped) continue;
+
+      // Si vamos a resolver (StateId=21) y el ticket GLPI tiene una solución, usamos su texto
+      // como Commentary → así queda en el apartado "Solución" de Aranda (no como genérico).
+      if (mapped.StateId === 21) {
+        const [[sol]] = await getDB().query(
+          `SELECT content FROM ticket_solutions
+            WHERE ticket_id = ? AND origin = 'GLPI' AND content IS NOT NULL AND content <> ''
+            ORDER BY solution_id DESC LIMIT 1`,
+          [ticket_id]
+        );
+        if (sol?.content) mapped.Commentary = sol.content;
+      }
 
       // Anti-eco: si Aranda ya nos empujó este mismo estado recientemente, no hagamos un ping-pong.
       if (await recentInverseEvent({
@@ -301,7 +314,7 @@ export class StatusSyncService extends BaseService {
         if (proposedGlpiStatus == null) continue;
 
         const [[mapRow]] = await getDB().query(
-          `SELECT ticket_id FROM aranda_items WHERE aranda_item_id = ? LIMIT 1`,
+          `SELECT ticket_id FROM aranda_items WHERE aranda_item_id = ? AND origin = 'GLPI' LIMIT 1`,
           [arandaItemId]
         );
         if (!mapRow) continue;

@@ -34,6 +34,7 @@ export class ArandaTasksPushService extends BaseService {
        LEFT JOIN aranda_task_notes an ON an.task_id = tk.task_id
        WHERE (an.task_id IS NULL OR (an.status = 'failed' AND an.tries < 5))
          AND tk.origin = 'GLPI'
+         AND ai.origin = 'GLPI'
        ORDER BY tk.task_id ASC
        LIMIT 100`
     );

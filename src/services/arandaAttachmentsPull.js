@@ -32,6 +32,7 @@ export class ArandaAttachmentsPullService extends BaseService {
          JOIN tickets t ON t.id = ai.ticket_id
          LEFT JOIN aranda_inbound_items aii ON aii.aranda_item_id = ai.aranda_item_id
         WHERE ai.status = 'synced'
+          AND ai.origin = 'GLPI'
           AND (t.status IS NULL OR t.status NOT IN (5, 6))
         ORDER BY ai.updated_at DESC
         LIMIT 80`

@@ -1,10 +1,10 @@
 import { BaseService } from '../lib/baseService.js';
 import { glpiClient } from '../lib/glpiClient.js';
 import { getDB } from '../lib/db.js';
-import { FROM_ARANDA_TAG } from '../lib/utils.js';
 
-// Una vez que un ticket GLPI fue creado en Aranda, deja un followup en GLPI con el código Aranda.
-// Solo aplica a mappings origin=GLPI (los origin=ARANDA ya tienen el código en su contenido inicial).
+// Una vez que un ticket GLPI fue creado en Aranda, fija el código Aranda (ComposedId) en el campo
+// nativo `externalid` del ticket GLPI — NO como followup/comentario.
+// Solo aplica a mappings origin=GLPI (los origin=ARANDA ya reciben su externalid al crearse, en arandaTicketPull).
 export class ArandaBacklinkToGlpiService extends BaseService {
   constructor(opts = {}) {
     super('arandaBacklinkToGlpi', opts);
@@ -29,8 +29,7 @@ export class ArandaBacklinkToGlpiService extends BaseService {
       this.processing.add(row.ticket_id);
 
       try {
-        const content = `${FROM_ARANDA_TAG} caso aranda: ${row.composed_item_id}`;
-        await glpiClient.addFollowup(row.ticket_id, content);
+        await glpiClient.updateTicket({ id: row.ticket_id, externalid: row.composed_item_id });
         await getDB().query(
           `UPDATE aranda_items
              SET glpi_backlinked_at = NOW(),
@@ -38,7 +37,7 @@ export class ArandaBacklinkToGlpiService extends BaseService {
            WHERE ticket_id = ?`,
           [row.ticket_id]
         );
-        this.log.info(`Backlink publicado ticket=${row.ticket_id} code=${row.composed_item_id}`, { ticket_id: row.ticket_id, direction: 'ARANDA_TO_GLPI' });
+        this.log.info(`External ID fijado ticket=${row.ticket_id} externalid=${row.composed_item_id}`, { ticket_id: row.ticket_id, direction: 'ARANDA_TO_GLPI' });
       } catch (err) {
         await getDB().query(
           `UPDATE aranda_items SET glpi_backlink_error = ? WHERE ticket_id = ?`,

@@ -49,7 +49,7 @@ Casos validados E2E: GLPI **42558** ↔ Aranda **368801**, GLPI **42586** ↔ Ar
 | Migraciones versionadas | ❌ | ✅ |
 | Health check | ❌ | ✅ |
 | Cursores persistidos | ❌ | ✅ |
-| Catálogo de servicios | ❌ | 🟡 stub |
+| Catálogo de categorías (mapeo GLPI↔Aranda) | ❌ | ✅ (77 mapeos en `service_catalog_sync`; servicio `catalogSync` = monitoreo) |
 
 ### 2.2 Problemas técnicos resueltos del MVP
 
@@ -99,8 +99,8 @@ Casos validados E2E: GLPI **42558** ↔ Aranda **368801**, GLPI **42586** ↔ Ar
 │  Estados bidireccional  (1)                                              │
 │    statusSync (PUSH+PULL en Promise.all + anti-eco)                       │
 │                                                                           │
-│  Fase 2 stub  (1)                                                         │
-│    catalogSync                                                            │
+│  Monitoreo del catálogo  (1)                                              │
+│    catalogSync (reporta cobertura de service_catalog_sync; no carga datos)│
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -163,14 +163,25 @@ Esquema completo documentado en [ARQUITECTURA.md](./ARQUITECTURA.md#modelo-de-da
 
 1. `glpiTicketSync`: lee `/Log` + `/Ticket/{id}`, UPSERT en `tickets` con `origin='GLPI'`.
 2. `arandaTicketPush`: `WHERE origin='GLPI' AND NOT EXISTS mapping`, POST a Aranda, INSERT mapping con `origin='GLPI'`.
-3. `arandaBacklinkToGlpi`: `WHERE glpi_backlinked_at IS NULL`, POST `[from aranda] caso RF-xxxx` como ITILFollowup.
+3. `arandaBacklinkToGlpi`: `WHERE glpi_backlinked_at IS NULL`, `PUT /Ticket` fijando `externalid` = ComposedId Aranda (ya no crea followup/comentario).
 4. `arandaNotesPush`: `ticket_followups WHERE origin='GLPI' AND content NOT LIKE '[from aranda]%'`, POST nota en Aranda.
 5. `arandaTasksPush`: `ticket_tasks WHERE origin='GLPI'`, POST nota con prefijo `[Tarea GLPI]`.
-6. `arandaSolutionPush`: `ticket_solutions WHERE origin='GLPI'`, POST con `Commentary`.
+6. `arandaSolutionPush`: `ticket_solutions WHERE origin='GLPI'` y el ticket está resuelto/cerrado (`status IN (5,6)`) → `POST /item/update` con **StateId=21 (Resuelto) + ReasonId=10 + Commentary=texto de la solución**. Aranda no tiene campo de solución dedicado: el apartado "Solución" se alimenta del Commentary de la transición a Resuelto. (Antes mandaba un Commentary suelto → aparecía como nota común.) `statusSync` también usa el texto de la solución como Commentary al empujar StateId=21. Los adjuntos de la solución (ITILSolution Document_Item) los sube `glpiAttachmentsSync` + `arandaAttachmentsPush`.
 
-### 5.2 Aranda → GLPI (nuevos)
+### 5.2 Aranda → GLPI (solo actualizaciones de casos originados en GLPI)
 
-1. `arandaTicketPull`: `POST /item/list` filtrando `AuthorId != ARANDA_AUTHOR_ID`; los items no presentes en `aranda_items` se procesan.
+> **Política GLPI-master (vigente):** los casos se crean **únicamente en GLPI**. Un caso creado en
+> Aranda **NO** debe crear un ticket en GLPI, y **no se sincroniza en absoluto**. La sincronización
+> (en ambos sentidos) ocurre **solo** para casos cuyo mapping en `aranda_items` tiene `origin='GLPI'`.
+>
+> - `arandaTicketPull` (creación inversa Aranda→GLPI) está **DESHABILITADO por defecto**
+>   (`ARANDA_TICKET_PULL_ENABLED=false`); no se registra en `index.js`.
+> - **Todos** los servicios de sync (push y pull) filtran por `aranda_items.origin='GLPI'`, de modo
+>   que aunque existieran mappings `origin='ARANDA'` (datos legacy), no se tocan.
+> - Las actualizaciones Aranda→GLPI (notas, estados, soluciones, adjuntos, prioridad) **sí** fluyen
+>   para los casos originados en GLPI — esa es la parte bidireccional.
+
+1. `arandaTicketPull` *(deshabilitado por defecto — solo si `ARANDA_TICKET_PULL_ENABLED=true`)*: `POST /item/list` filtrando `AuthorId != ARANDA_AUTHOR_ID`; los items no presentes en `aranda_items` se procesan.
    - Bootstrap silencioso: la primera vez marca todos los items existentes como `ignored` para no inundar GLPI.
    - Cursor `aranda_pull_max_id` para procesamiento incremental.
    - Crea ticket en GLPI con `origin='ARANDA'`, registra mapping en `aranda_items` y `aranda_inbound_items`.
@@ -322,7 +333,7 @@ Como `glpiTicketSync` depende de `/Log` (que rota agresivamente), no captura tod
 | `src/services/glpiTicketSync.js` | `Promise.all` de las dos llamadas, guarda `itilcategory_name` (texto) y `itilcategories_id` (id), normaliza `0 → NULL` |
 | `src/services/arandaTicketPush.js` | LEFT JOIN con `service_catalog_sync`, sobrescribe `CategoryId` y `segment` si hay match |
 | `src/services/arandaTicketPull.js` | Captura `CategoryId` de Aranda, LEFT JOIN inverso para fijar `itilcategories_id` |
-| `src/services/catalogSync.js` | Stub liviano de verificación de schema (mantenido por compatibilidad) |
+| `src/services/catalogSync.js` | Monitoreo: reporta nº de mapeos en `service_catalog_sync` al arrancar y avisa si está vacía. NO carga el catálogo (eso lo hace `seed-catalog-local.js`). |
 
 ### Pendientes funcionales (no bloquean operación)
 
