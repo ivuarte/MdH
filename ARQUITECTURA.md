@@ -383,26 +383,63 @@ _schema_version (version PK, applied_at, description)
 
 ## Mapeo de Estados — descubierto vía Aranda `/state/list` y `/state/{id}/reasons`
 
+> **Diccionario único:** todo el mapeo de estados vive en **`src/lib/arandaStates.js`** (StateId por
+> segmento, ReasonId obligatorio y la equivalencia con GLPI). `statusSync.js` solo lo consume. La
+> resolución es **segment-aware**: el StateId siempre se elige/valida según el segmento del caso
+> (IM=1 / RF=4), de modo que **un INCIDENTE nunca recibe un ID de SERVICIO ni viceversa**
+> (p.ej. Pendiente = 65 en IM pero 66 en RF; un 65 sobre un caso RF se ignora).
+
 **Aranda usa DOS sets de StateId según `CaseType`** (lección clave del diagnóstico):
 
 | GLPI status | Descripción GLPI | CaseType=1 (IM/segment=1) | CaseType=4 (RF/segment=4) | Reason | Commentary obligatorio |
 |-------------|------------------|---------------------------|---------------------------|--------|------------------------|
 | 1 | Nuevo            | — (no se propaga)         | — (no se propaga)         | —      | — |
-| 2 / 3 | En curso     | StateId=20 (Proceso)      | StateId=20 (Proceso)      | 7      | sí |
+| 2 / 3 | En curso     | StateId=8 (En Curso)      | StateId=20 (Proceso)      | 7      | sí |
 | 4 | En espera        | StateId=10                | StateId=19                | 69 / 8 | sí |
 | 5 | Resuelto         | StateId=21                | StateId=21                | 10     | sí |
 | 6 | Cerrado          | StateId=21 *(ver nota)*   | StateId=21 *(ver nota)*   | 10     | sí |
 
 **Nota crítica:** el rol `Atena_GLPI` NO tiene permiso para cerrar casos en Aranda (StateId 11 IM / 29 RF devuelven `403 UnauthorizedCaseClosure`). GLPI Cerrado se mapea a Aranda Resuelto; el cierre formal queda como acción humana en Aranda.
 
+#### Catálogo COMPLETO de StateId Aranda (homologado)
+
+Los IDs **difieren entre INCIDENTE (IM, seg 1) y SERVICIO (RF, seg 4)**. SERVICIO tiene un ciclo de vida más rico (análisis/desarrollo/pruebas/RFC):
+
+| Estado | INCIDENTE (IM) | SERVICIO (RF) |
+|--------|:--------------:|:-------------:|
+| Registrado | — | 13 |
+| Asignado | 7 | 16 |
+| Asignado RFC | — | 22 |
+| En Curso | 8 | — |
+| Proceso | 20 | 20 |
+| Análisis | — | 23 |
+| Desarrollo | — | 25 |
+| Pruebas | — | 26 |
+| Post Implementación | — | 28 |
+| Pago Firma Digital | — | 70 |
+| En Espera | 10 | 19 |
+| En Espera RFC | — | 24 |
+| Pendiente | 65 | 66 |
+| Resuelto | 21, 12 | 21 |
+| Resuelto RFC | — | 27 |
+| Cerrado | 11 | 29 |
+| Solicitud de Anulado | 59 | 17 |
+| Anulado | 9 | 60 |
+| Anulado RFC | — | 30 |
+
+> El **push** GLPI→Aranda sólo usa los StateId de la tabla de arriba (Proceso/En Espera/Resuelto), porque GLPI no genera los estados ricos. El **pull** Aranda→GLPI sí reconoce el set completo.
+
 **Inverso Aranda → GLPI** (con regla "no degradar"):
 
-| Aranda StateId | GLPI status | Reglas adicionales |
-|----------------|-------------|--------------------|
+| Aranda StateId | GLPI status | Notas |
+|----------------|-------------|-------|
 | 11, 29 | 6 (Cerrado) | — |
-| 21 | 5 (Resuelto) | — |
-| 10, 19 | 4 (En espera) | — |
-| 20, 7, 16 | 2 (En curso asignada) | No degradar si GLPI ya está en 5 o 6 |
+| 9, 60, 30 (Anulado / Anulado RFC) | 6 (Cerrado) | GLPI no tiene "cancelado"; un caso anulado termina → se cierra el ticket |
+| 21, 12, 27 | 5 (Resuelto) | incluye Resuelto IM alterno (12) y Resuelto RFC (27) |
+| 10, 19, 24, 65, 66 | 4 (En espera) | En Espera (IM/RF), En Espera RFC, Pendiente (IM/RF) |
+| 7, 16, 22, 8, 20, 23, 25, 26, 28, 70 | 2 (En curso asignada) | Asignado, Asignado RFC, En Curso, Proceso, Análisis, Desarrollo, Pruebas, Post Impl., Pago Firma Digital. No degradar si GLPI ya está en 5 o 6 |
+| 13 (Registrado) | — (ignorado) | equivaldría a GLPI 1 (Nuevo); no degradamos a 1 |
+| 59, 17 (Solicitud de Anulado) | — (ignorado) | estado pendiente, no final; no se cierra GLPI por una solicitud aún no aprobada |
 
 **Por qué GLPI 1 (Nuevo) no se propaga**: el pull reverso de Aranda 20 (Proceso) lo llevaría a 2 (En curso), creando un loop con el push. Esperamos a que GLPI avance a 2/3 antes de tocar Aranda.
 

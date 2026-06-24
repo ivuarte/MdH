@@ -5,80 +5,51 @@ import { getDB } from '../lib/db.js';
 import { config } from '../config.js';
 import { truthy } from '../lib/utils.js';
 import { recordEvent, recentInverseEvent } from '../lib/syncEvents.js';
+import {
+  ARANDA_SEGMENT, arandaStateId, arandaReason, arandaStateToGlpi, arandaSegmentFromGlpiType
+} from '../lib/arandaStates.js';
 
-// segment Aranda según GLPI type: 1=incidente → 1, 2=requerimiento → 4.
-function arandaSegmentFromGlpiType(type) {
-  return Number(type) === 2 ? 4 : 1;
-}
-
-// Mapas de estado descubiertos vía /state/list y /state/{id}/reasons:
-//
-// CaseType=1 (Incidente, segment=1):
-//   7  Asignado          11 Cerrado            10 En Espera
-//   20 Proceso           21 Resuelto           9  Anulado
-//
-// CaseType=4 (Requerimiento, segment=4):
-//   16 Asignado          29 Cerrado            19 En Espera
-//   20 Proceso           21 Resuelto           60 Anulado
-//
-// Reasons obligatorios al cambiar estado:
-//   StateId=10 (En Espera, IM)  → 69 "Se pone en Espera el caso"
-//   StateId=19 (En Espera, RF)  → 8  "En Espera de información"
-//   StateId=20 (Proceso)        → 7  "Especialista atiende el Caso"
-//   StateId=21 (Resuelto)       → 10 "Especialista resuelve el caso"
-//   StateId=11 (Cerrado, IM)    → 12 "El usuario aprueba solución del caso y se cierra"
-//   StateId=29 (Cerrado, RF)    → 29 "El cliente aprueba solución del caso"
-//
-// El endpoint /item/update/{id}/{seg}/{user} exige el campo Commentary cuando hay
-// cambio de estado (sin él devuelve 400 InvalidCommentary).
+// El diccionario completo de estados (IDs por segmento, reasons y la equivalencia con GLPI)
+// vive en lib/arandaStates.js — fuente ÚNICA de verdad. Aquí sólo se define la equivalencia
+// GLPI status → estado semántico Aranda; el StateId/ReasonId concreto los resuelve el
+// diccionario SEGÚN EL SEGMENTO, garantizando que un INCIDENTE nunca reciba un ID de SERVICIO.
 //
 // GLPI statuses: 1=Nuevo, 2=En curso asignada, 3=En curso planificada, 4=En espera, 5=Resuelto, 6=Cerrado.
+// El endpoint /item/update/{id}/{seg}/{user} exige Commentary al cambiar de estado (400 InvalidCommentary si falta).
 function mapGlpiToAranda(glpiStatus, glpiType) {
   const s = Number(glpiStatus);
-  const isIncident = Number(glpiType) === 1;
-  // GLPI 1 (Nuevo) NO se propaga a Aranda:
-  //   - El pull Aranda→GLPI mapea 20 (Proceso) → 2 (En curso), creando un loop con el push.
-  //   - "Nuevo" tampoco refleja la realidad: si ya hay un item en Aranda, alguien está trabajando.
-  //   Esperamos a que GLPI avance a 2/3 (En curso) antes de tocar Aranda.
+  const seg = arandaSegmentFromGlpiType(glpiType);  // 1 (IM) | 4 (RF)
+
+  // Resuelve { StateId, ReasonId, Commentary } para un estado semántico en el segmento del caso.
+  const build = (stateName, commentary) => {
+    const StateId = arandaStateId(seg, stateName);
+    if (StateId == null) return null;  // el segmento no tiene ese estado
+    return { StateId, ReasonId: arandaReason(seg, StateId), Commentary: commentary };
+  };
+
+  // GLPI 1 (Nuevo) NO se propaga: el pull mapearía Proceso (20) → GLPI 2, creando loop con el push;
+  // y si ya hay item en Aranda, alguien está trabajando. Esperamos a que GLPI avance a 2/3.
   if (s === 1) return null;
-  // 2/3 → Proceso (mismo para ambos tipos)
+  // 2/3 → En curso. INCIDENTE usa "En Curso" (StateId 8); SERVICIO no tiene ese estado,
+  // así que cae a "Proceso" (StateId 20). El diccionario resuelve el ID por segmento.
   if (s === 2 || s === 3) {
-    return { StateId: 20, ReasonId: 7, Commentary: 'Caso en proceso (sincronizado desde GLPI)' };
+    const stateName = seg === ARANDA_SEGMENT.IM ? 'EnCurso' : 'Proceso';
+    return build(stateName, 'Caso en proceso (sincronizado desde GLPI)');
   }
-  // 4 → En espera (diferente por tipo)
-  if (s === 4) {
-    return isIncident
-      ? { StateId: 10, ReasonId: 69, Commentary: 'En espera (sincronizado desde GLPI)' }
-      : { StateId: 19, ReasonId: 8,  Commentary: 'En espera (sincronizado desde GLPI)' };
-  }
-  // 5 → Resuelto (mismo StateId para ambos)
-  if (s === 5) {
-    return { StateId: 21, ReasonId: 10, Commentary: 'Caso resuelto (sincronizado desde GLPI)' };
-  }
-  // 6 → Cerrado:
-  //   El rol Atena_GLPI NO tiene permiso para cerrar casos en Aranda (devuelve 403 UnauthorizedCaseClosure).
-  //   El cierre formal es una acción humana en Aranda. Por convención mapeamos GLPI 6 (Cerrado)
-  //   → Aranda 21 (Resuelto) para que el operador vea que el caso terminó en GLPI y proceda a cerrarlo.
-  if (s === 6) {
-    return { StateId: 21, ReasonId: 10, Commentary: 'Caso cerrado en GLPI (queda pendiente el cierre formal por el operador en Aranda)' };
-  }
+  // 4 → En Espera (IM=10 / RF=19, resuelto por segmento)
+  if (s === 4) return build('EnEspera', 'En espera (sincronizado desde GLPI)');
+  // 5 → Resuelto (21 en ambos)
+  if (s === 5) return build('Resuelto', 'Caso resuelto (sincronizado desde GLPI)');
+  // 6 → Cerrado: el rol Atena_GLPI NO puede cerrar en Aranda (403 UnauthorizedCaseClosure).
+  //   Mapeamos GLPI Cerrado → Aranda Resuelto (21) para que el operador vea que terminó y cierre.
+  if (s === 6) return build('Resuelto', 'Caso cerrado en GLPI (queda pendiente el cierre formal por el operador en Aranda)');
   return null;
 }
 
-// Inverso Aranda → GLPI. Acepta cualquier StateId equivalente a Resuelto / Cerrado / En espera / Proceso,
-// para los dos tipos (1 y 4). No retornar 1 (Nuevo) nunca — degradaría tickets ya asignados.
-// El caller decide si "no degradar" (p.ej. si current=1 y queremos llevarlo a 2).
-function mapArandaToGlpi(stateId) {
-  const s = Number(stateId);
-  // Cerrado
-  if (s === 11 || s === 29) return 6;
-  // Resuelto
-  if (s === 21) return 5;
-  // En espera (ambos tipos)
-  if (s === 10 || s === 19) return 4;
-  // Proceso / Asignado → GLPI 2 (En curso asignada)
-  if (s === 20 || s === 7 || s === 16) return 2;
-  return null;
+// Inverso Aranda → GLPI, VALIDADO por segmento: un StateId sólo se interpreta si pertenece
+// al segmento del caso (IM=1 / RF=4). Toda la tabla de equivalencias vive en el diccionario.
+function mapArandaToGlpi(stateId, segment) {
+  return arandaStateToGlpi(stateId, segment);
 }
 
 // Sincronización bidireccional de estados. Ejecuta PUSH y PULL en paralelo en cada tick.
@@ -310,9 +281,9 @@ export class StatusSyncService extends BaseService {
         const arandaStateId = Number(it?.StateId);
         if (!Number.isFinite(arandaItemId) || !Number.isFinite(arandaStateId)) continue;
 
-        const proposedGlpiStatus = mapArandaToGlpi(arandaStateId);
-        if (proposedGlpiStatus == null) continue;
-
+        // Resolvemos primero el ticket GLPI mapeado para conocer el SEGMENTO del caso
+        // (IM=1 / RF=4) y validar el StateId Aranda contra ese segmento: así un ID de
+        // INCIDENTE nunca se interpreta como uno de SERVICIO (p.ej. Pendiente 65 vs 66).
         const [[mapRow]] = await getDB().query(
           `SELECT ticket_id FROM aranda_items WHERE aranda_item_id = ? AND origin = 'GLPI' LIMIT 1`,
           [arandaItemId]
@@ -321,10 +292,14 @@ export class StatusSyncService extends BaseService {
 
         const ticketId = mapRow.ticket_id;
         const [[tRow]] = await getDB().query(
-          `SELECT status FROM tickets WHERE id = ? LIMIT 1`,
+          `SELECT status, type FROM tickets WHERE id = ? LIMIT 1`,
           [ticketId]
         );
         const current = tRow ? Number(tRow.status) : null;
+        const segment = arandaSegmentFromGlpiType(tRow?.type);
+
+        const proposedGlpiStatus = mapArandaToGlpi(arandaStateId, segment);
+        if (proposedGlpiStatus == null) continue;
 
         // "No degradar": si Aranda viene con un estado menos avanzado que el actual de GLPI,
         // no rebajamos. Esto evita que cuando el operador cierra en GLPI y aún no se ha empujado
