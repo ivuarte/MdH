@@ -4,13 +4,11 @@ import { getDB } from '../lib/db.js';
 import { config } from '../config.js';
 import { truthy } from '../lib/utils.js';
 import { recordEvent } from '../lib/syncEvents.js';
-
-function arandaSegmentFromGlpiType(type) {
-  return Number(type) === 2 ? 4 : 1;
-}
+import { arandaStateId, arandaReason, arandaSegmentFromGlpiType } from '../lib/arandaStates.js';
 
 // Propaga ticket_solutions origin=GLPI a Aranda RESOLVIENDO el caso: /item/update con
-// StateId=21 (Resuelto) + ReasonId=10 + Commentary=texto de la solución. Aranda ASDK no
+// StateId de "Resuelto" (12 en INCIDENTE / 21 en SERVICIO, resuelto por segmento) + ReasonId=10
+// + Commentary=texto de la solución. El 21 NO existe en incidentes. Aranda ASDK no
 // tiene campo de "solución" dedicado (confirmado en la doc oficial v8); el apartado "Solución"
 // se alimenta del Commentary de la transición a Resuelto. Por eso NO se manda Commentary suelto
 // (eso aparecía como nota común).
@@ -48,11 +46,14 @@ export class ArandaSolutionPushService extends BaseService {
 
       try {
         const segment = arandaSegmentFromGlpiType(glpi_type);
-        // StateId=21 (Resuelto) + ReasonId=10 ("Especialista resuelve el caso") → el Commentary
-        // queda como la SOLUCIÓN del caso en Aranda. Rol Atena_GLPI sí puede setear 21 (no 11/29).
+        // Estado "Resuelto" del segmento (12 IM / 21 RF) + su ReasonId ("Especialista resuelve el
+        // caso") → el Commentary queda como la SOLUCIÓN del caso en Aranda. Rol Atena_GLPI sí puede
+        // setear Resuelto (no Cerrado 11/29).
+        const resueltoStateId = arandaStateId(segment, 'Resuelto');
+        const resueltoReasonId = arandaReason(segment, resueltoStateId);
         const fields = [
-          { Field: 'StateId',    Value: 21 },
-          { Field: 'ReasonId',   Value: 10 },
+          { Field: 'StateId',    Value: resueltoStateId },
+          { Field: 'ReasonId',   Value: resueltoReasonId },
           { Field: 'Commentary', Value: content || '' }
         ];
         let obj;

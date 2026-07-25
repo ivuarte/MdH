@@ -10,7 +10,7 @@ import { arandaUrgencyToGlpi, arandaPriorityToGlpi } from '../lib/priorityMappin
 // Mapea estado Aranda → GLPI (estado nuevo en GLPI cuando se crea desde Aranda).
 function initialGlpiStatusFromAranda(arandaStateId) {
   const s = Number(arandaStateId);
-  if (s === 21) return 5;
+  if (s === 21 || s === 12) return 5; // Resuelto: 21 en SERVICIO / 12 en INCIDENTE
   if (s === 19) return 4;
   if (s === 20) return 2;
   return 1; // Nuevo

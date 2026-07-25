@@ -38,10 +38,10 @@ function mapGlpiToAranda(glpiStatus, glpiType) {
   }
   // 4 → En Espera (IM=10 / RF=19, resuelto por segmento)
   if (s === 4) return build('EnEspera', 'En espera (sincronizado desde GLPI)');
-  // 5 → Resuelto (21 en ambos)
+  // 5 → Resuelto (IM=12 / RF=21, resuelto por segmento — el 21 no existe en incidentes)
   if (s === 5) return build('Resuelto', 'Caso resuelto (sincronizado desde GLPI)');
   // 6 → Cerrado: el rol Atena_GLPI NO puede cerrar en Aranda (403 UnauthorizedCaseClosure).
-  //   Mapeamos GLPI Cerrado → Aranda Resuelto (21) para que el operador vea que terminó y cierre.
+  //   Mapeamos GLPI Cerrado → Aranda Resuelto (IM=12 / RF=21) para que el operador vea que terminó y cierre.
   if (s === 6) return build('Resuelto', 'Caso cerrado en GLPI (queda pendiente el cierre formal por el operador en Aranda)');
   return null;
 }
@@ -91,9 +91,11 @@ export class StatusSyncService extends BaseService {
       const mapped = mapGlpiToAranda(glpi_status, glpi_type);
       if (!mapped) continue;
 
-      // Si vamos a resolver (StateId=21) y el ticket GLPI tiene una solución, usamos su texto
-      // como Commentary → así queda en el apartado "Solución" de Aranda (no como genérico).
-      if (mapped.StateId === 21) {
+      // Si vamos a resolver (StateId de "Resuelto" según el segmento: 12 IM / 21 RF) y el ticket
+      // GLPI tiene una solución, usamos su texto como Commentary → así queda en el apartado
+      // "Solución" de Aranda (no como genérico).
+      const resueltoStateId = arandaStateId(arandaSegmentFromGlpiType(glpi_type), 'Resuelto');
+      if (mapped.StateId === resueltoStateId) {
         const [[sol]] = await getDB().query(
           `SELECT content FROM ticket_solutions
             WHERE ticket_id = ? AND origin = 'GLPI' AND content IS NOT NULL AND content <> ''

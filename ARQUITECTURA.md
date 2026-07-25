@@ -144,7 +144,7 @@ MdH_v2/
 | 6 | `arandaBacklinkToGlpi` | `aranda_items` con `glpi_backlinked_at IS NULL` | `PUT /Ticket` fijando `externalid` = ComposedId Aranda (NO followup) | `aranda_items.glpi_backlinked_at` |
 | 7 | `arandaNotesPush` | `ticket_followups origin=GLPI` no enviados | `POST /item/{id}/{seg}/note` | `aranda_followup_notes` |
 | 8 | `arandaTasksPush` | `ticket_tasks origin=GLPI` no enviados | `POST /item/{id}/{seg}/note` con prefijo `[Tarea GLPI]` | `aranda_task_notes` |
-| 9 | `arandaSolutionPush` | `ticket_solutions origin=GLPI` no enviados, con ticket `status IN (5,6)` | `POST /item/update` con **StateId=21 (Resuelto) + ReasonId=10 + Commentary=solución** → cae en el apartado "Solución" de Aranda (no hay campo dedicado) | `aranda_solution_updates` |
+| 9 | `arandaSolutionPush` | `ticket_solutions origin=GLPI` no enviados, con ticket `status IN (5,6)` | `POST /item/update` con **StateId=Resuelto (12 IM / 21 RF) + ReasonId=10 + Commentary=solución** → cae en el apartado "Solución" de Aranda (no hay campo dedicado) | `aranda_solution_updates` |
 
 ### Pull Aranda → MySQL → GLPI
 
@@ -396,10 +396,12 @@ _schema_version (version PK, applied_at, description)
 | 1 | Nuevo            | — (no se propaga)         | — (no se propaga)         | —      | — |
 | 2 / 3 | En curso     | StateId=8 (En Curso)      | StateId=20 (Proceso)      | 7      | sí |
 | 4 | En espera        | StateId=10                | StateId=19                | 69 / 8 | sí |
-| 5 | Resuelto         | StateId=21                | StateId=21                | 10     | sí |
-| 6 | Cerrado          | StateId=21 *(ver nota)*   | StateId=21 *(ver nota)*   | 10     | sí |
+| 5 | Resuelto         | StateId=12 (Resuelto)     | StateId=21 (Resuelto)     | 10     | sí |
+| 6 | Cerrado          | StateId=12 *(ver nota)*   | StateId=21 *(ver nota)*   | 10     | sí |
 
-**Nota crítica:** el rol `Atena_GLPI` NO tiene permiso para cerrar casos en Aranda (StateId 11 IM / 29 RF devuelven `403 UnauthorizedCaseClosure`). GLPI Cerrado se mapea a Aranda Resuelto; el cierre formal queda como acción humana en Aranda.
+**Nota crítica 1 — Resuelto NO comparte ID:** en INCIDENTE (IM) "Resuelto" es **StateId=12** (el 21 **no existe** en incidentes); en SERVICIO (RF) es **StateId=21**. El diccionario `src/lib/arandaStates.js` resuelve el ID por segmento en TODOS los servicios (push de estado, push de solución, pull de solución, pull de casos entrantes).
+
+**Nota crítica 2 — cierre:** el rol `Atena_GLPI` NO tiene permiso para cerrar casos en Aranda (StateId 11 IM / 29 RF devuelven `403 UnauthorizedCaseClosure`). GLPI Cerrado se mapea a Aranda Resuelto; el cierre formal queda como acción humana en Aranda.
 
 #### Catálogo COMPLETO de StateId Aranda (homologado)
 
@@ -420,7 +422,7 @@ Los IDs **difieren entre INCIDENTE (IM, seg 1) y SERVICIO (RF, seg 4)**. SERVICI
 | En Espera | 10 | 19 |
 | En Espera RFC | — | 24 |
 | Pendiente | 65 | 66 |
-| Resuelto | 21, 12 | 21 |
+| Resuelto | 12 | 21 |
 | Resuelto RFC | — | 27 |
 | Cerrado | 11 | 29 |
 | Solicitud de Anulado | 59 | 17 |
@@ -435,7 +437,7 @@ Los IDs **difieren entre INCIDENTE (IM, seg 1) y SERVICIO (RF, seg 4)**. SERVICI
 |----------------|-------------|-------|
 | 11, 29 | 6 (Cerrado) | — |
 | 9, 60, 30 (Anulado / Anulado RFC) | 6 (Cerrado) | GLPI no tiene "cancelado"; un caso anulado termina → se cierra el ticket |
-| 21, 12, 27 | 5 (Resuelto) | incluye Resuelto IM alterno (12) y Resuelto RFC (27) |
+| 12, 21, 27 | 5 (Resuelto) | Resuelto IM (12), Resuelto RF (21) y Resuelto RFC (27) — cada ID validado contra su segmento |
 | 10, 19, 24, 65, 66 | 4 (En espera) | En Espera (IM/RF), En Espera RFC, Pendiente (IM/RF) |
 | 7, 16, 22, 8, 20, 23, 25, 26, 28, 70 | 2 (En curso asignada) | Asignado, Asignado RFC, En Curso, Proceso, Análisis, Desarrollo, Pruebas, Post Impl., Pago Firma Digital. No degradar si GLPI ya está en 5 o 6 |
 | 13 (Registrado) | — (ignorado) | equivaldría a GLPI 1 (Nuevo); no degradamos a 1 |
@@ -644,7 +646,7 @@ statusSync (PULL)
   → UPDATE tickets SET status (importante: cache local porque /Log no lo capta)
   → recordEvent ARANDA_TO_GLPI
 
-arandaSolutionPull (cuando StateId=21 Resuelto persiste)
+arandaSolutionPull (cuando StateId Resuelto persiste — 12 IM / 21 RF)
   → GET /item/{id}/{seg}/note/list
   → busca transición [STATUS]→Resuelto + [COMMENTARY] del mismo CreationDate/AuthorName
   → si autor = bot Atena_GLPI → skip (lo movió el sync, no es solución humana)
@@ -827,11 +829,11 @@ Notas/tareas del humano usando la cuenta del bot **NO llevan marcador** → se p
 
 **Problema**: `POST /item/update` con StateId 11 (Cerrado IM) o 29 (Cerrado RF) devuelve `403 UnauthorizedCaseClosure`.
 
-**Mitigación**: GLPI status 6 (Cerrado) se mapea a Aranda StateId 21 (Resuelto) en lugar de Cerrado. El cierre formal del caso en Aranda queda como acción humana que el operador hace al final. Documentado en el Commentary que el bot envía: "Caso cerrado en GLPI (queda pendiente el cierre formal por el operador en Aranda)".
+**Mitigación**: GLPI status 6 (Cerrado) se mapea a Aranda Resuelto (StateId 12 en IM / 21 en RF) en lugar de Cerrado. El cierre formal del caso en Aranda queda como acción humana que el operador hace al final. Documentado en el Commentary que el bot envía: "Caso cerrado en GLPI (queda pendiente el cierre formal por el operador en Aranda)".
 
 ### 4. Aranda requiere todas las tareas cerradas antes de Resuelto/Cerrado
 
-**Problema**: si un caso Aranda tiene tareas reales pendientes (ActionType=22 abiertas), `POST /item/update` con StateId=21 (Resuelto) devuelve `400 TaskPending`. Y el bot no puede cerrar tareas Aranda (limitación 2).
+**Problema**: si un caso Aranda tiene tareas reales pendientes (ActionType=22 abiertas), `POST /item/update` con StateId de Resuelto (12 IM / 21 RF) devuelve `400 TaskPending`. Y el bot no puede cerrar tareas Aranda (limitación 2).
 
 **Mitigación**: `statusSync` detecta `TaskPending`, NO marca como synced, registra el error claro:
 ```
@@ -891,9 +893,9 @@ El siguiente tick reintenta, así que apenas el operador cierra las tareas manua
 ### 13. Estados Aranda usan dos sets de IDs según `CaseType`
 
 **Problema**: para Incidencias (CaseType=1, segment=1) y Requerimientos (CaseType=4, segment=4) los `StateId` son diferentes:
-- IM: En Espera=10, Cerrado=11
-- RF: En Espera=19, Cerrado=29
-- Comunes a ambos: Proceso=20, Resuelto=21
+- IM: En Espera=10, Cerrado=11, Resuelto=12 (el 21 no existe en IM)
+- RF: En Espera=19, Cerrado=29, Resuelto=21
+- Común a ambos: sólo Proceso=20
 
 **Mitigación**: `mapGlpiToAranda(status, type)` recibe ambos parámetros y devuelve el mapeo correcto. Hay fallback automático al segmento opuesto ante 404 (cuando el `type` GLPI quedó desalineado con `CaseType` real).
 

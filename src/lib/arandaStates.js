@@ -20,9 +20,9 @@
 //   10  En Espera                        22  Asignado RFC
 //   65  Pendiente                        29  Cerrado
 //   20  Proceso                          25  Desarrollo
-//   21  Resuelto                         19  En Espera
-//   12  Resuelto (alterno)               24  En Espera RFC
-//   59  Solicitud de Anulado             70  Pago Firma Digital
+//   12  Resuelto                         19  En Espera
+//   59  Solicitud de Anulado             24  En Espera RFC
+//                                        70  Pago Firma Digital
 //                                        66  Pendiente
 //                                        28  Post Implementacion
 //                                        20  Proceso
@@ -32,7 +32,9 @@
 //                                        27  Resuelto RFC
 //                                        17  Solicitud de Anulado
 //
-// Sólo Proceso (20) y Resuelto (21) comparten ID entre ambos segmentos.
+// OJO: "Resuelto" NO comparte ID entre segmentos: es 12 en INCIDENTE y 21 en SERVICIO.
+//   El 21 NO existe en el segmento INCIDENTE (confirmado por el equipo Aranda) — por eso
+//   un incidente SIEMPRE se resuelve con 12. Sólo Proceso (20) comparte ID en ambos.
 // =============================================================================
 
 export const ARANDA_SEGMENT = { IM: 1, RF: 4 };
@@ -47,8 +49,7 @@ export const ARANDA_STATES = {
     EnEspera: 10,
     Pendiente: 65,
     Proceso: 20,
-    Resuelto: 21,
-    ResueltoAlt: 12,
+    Resuelto: 12,        // INCIDENTE: el "Resuelto" válido es 12. El 21 NO existe en este segmento.
     SolicitudAnulado: 59
   },
   4: {  // SERVICIO / requerimiento (RF)
@@ -81,7 +82,7 @@ export const ARANDA_STATE_REASONS = {
     8: 7,    // En Curso       → "Especialista atiende el Caso" (reasons válidos: 7, 9, 90)
     20: 7,   // Proceso        → "Especialista atiende el Caso"
     10: 69,  // En Espera      → "Se pone en Espera el caso"
-    21: 10,  // Resuelto       → "Especialista resuelve el caso"
+    12: 10,  // Resuelto       → "Especialista resuelve el caso" (reasons válidos p/12: 10, 88)
     11: 12   // Cerrado        → "El usuario aprueba solución del caso y se cierra"
   },
   4: {  // RF
@@ -106,8 +107,7 @@ const STATE_TO_GLPI = {
   Anulado: 6,            // un caso anulado termina → cierra el ticket GLPI
   AnuladoRFC: 6,
   // → 5 Resuelto
-  Resuelto: 5,
-  ResueltoAlt: 5,
+  Resuelto: 5,          // 12 en IM · 21 en RF
   ResueltoRFC: 5,
   // → 4 En espera
   EnEspera: 4,

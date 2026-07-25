@@ -5,9 +5,10 @@ import { getDB } from '../lib/db.js';
 import { config } from '../config.js';
 import { normalizeHtml } from '../lib/utils.js';
 import { recordEvent } from '../lib/syncEvents.js';
+import { ARANDA_STATES } from '../lib/arandaStates.js';
 
 // Aranda guarda la solución del operador en el campo COMMENTARY cuando el caso
-// pasa a Resuelto (StateId=21). El note/list expone:
+// pasa a Resuelto (StateId=12 en INCIDENTE / 21 en SERVICIO). El note/list expone:
 //   ActionType=4 (MODIFICAR ITEM)
 //   Description: <span>[STATUS]</span>... New: Resuelto
 //   Description: <span>[COMMENTARY]</span>... Old: ... - New: <html>
@@ -22,7 +23,9 @@ import { recordEvent } from '../lib/syncEvents.js';
 //   5. Registramos en aranda_solution_pulls (tracker) y ticket_solutions (caché global)
 //      con solution_id = -aranda_item_id (negativo para no chocar con ids GLPI positivos).
 
-const STATE_RESUELTO = 21;
+// "Resuelto" tiene StateId distinto por segmento: 12 en INCIDENTE (IM) y 21 en SERVICIO (RF).
+// El 21 no existe en incidentes, así que debemos mirar AMBOS para no perder soluciones de IM.
+const STATE_RESUELTO_IDS = [ARANDA_STATES[1].Resuelto, ARANDA_STATES[4].Resuelto]; // [12, 21]
 const ACTION_TYPE_MODIFY = 4;
 const SYNC_BATCH_SIZE = 50;
 const MAX_TRIES = 5;
@@ -113,14 +116,14 @@ export class ArandaSolutionPullService extends BaseService {
          JOIN tickets t ON t.id = ai.ticket_id
          JOIN aranda_status_sync ass ON ass.ticket_id = ai.ticket_id
          LEFT JOIN aranda_solution_pulls asp ON asp.aranda_item_id = ai.aranda_item_id
-        WHERE ass.last_aranda_stateid = ?
+        WHERE ass.last_aranda_stateid IN (?, ?)
           AND ai.status = 'synced'
           AND ai.origin = 'GLPI'
           AND (asp.aranda_item_id IS NULL
                OR (asp.status = 'failed' AND asp.tries < ?))
         ORDER BY ai.ticket_id ASC
         LIMIT ?`,
-      [STATE_RESUELTO, MAX_TRIES, SYNC_BATCH_SIZE]
+      [STATE_RESUELTO_IDS[0], STATE_RESUELTO_IDS[1], MAX_TRIES, SYNC_BATCH_SIZE]
     );
 
     for (const row of rows) {
